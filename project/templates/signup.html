@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>회원가입 (Firebase 이메일 인증)</title>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+    import {
+      getAuth,
+      createUserWithEmailAndPassword,
+      sendEmailVerification
+    } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyB9LGrk-0WQXSk8D-2uWwRf55-srfZwjHE",
+      authDomain: "push-8f1dc.firebaseapp.com",
+      projectId: "push-8f1dc",
+      storageBucket: "push-8f1dc.appspot.com",
+      messagingSenderId: "323708834561",
+      appId: "1:323708834561:web:48a59d3535778b67ff4100",
+      measurementId: "G-9FXX5CDVH7"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+
+    window.signup = async function () {
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+
+      try {
+        const userCred = await createUserWithEmailAndPassword(auth, email, password);
+        await sendEmailVerification(userCred.user);
+        alert("인증 메일이 전송되었습니다. 메일함을 확인해주세요.");
+        location.href = '/login';
+      } catch (error) {
+        alert("회원가입 실패: " + error.message);
+      }
+    }
+  </script>
+</head>
+<body>
+  <h2>회원가입</h2>
+  <input type="email" id="email" placeholder="이메일 입력"><br><br>
+  <input type="password" id="password" placeholder="비밀번호 입력"><br><br>
+  <button onclick="signup()">회원가입</button>
+</body>
+</html>
