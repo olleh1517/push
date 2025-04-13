@@ -4,13 +4,18 @@ import firebase_admin
 from firebase_admin import credentials, auth as firebase_auth
 from smtp_utils import send_verification_email
 import uuid, time, random, os
+import json
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
 socketio = SocketIO(app)
 
-# Firebase Admin SDK 초기화
-cred = credentials.Certificate("firebase-adminsdk.json")
+firebase_json = os.environ.get("FIREBASE_CREDENTIALS")
+if not firebase_json:
+    raise ValueError("FIREBASE_CREDENTIALS 환경변수가 설정되어 있지 않습니다.")
+
+cred_dict = json.loads(firebase_json)
+cred = credentials.Certificate(cred_dict)
 firebase_admin.initialize_app(cred)
 
 login_requests = {}   # Push 인증 요청 저장
