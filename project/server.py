@@ -4,7 +4,11 @@ import firebase_admin
 from firebase_admin import credentials, auth as firebase_auth
 from smtp_utils import send_verification_email
 import uuid, time, random
+import os
 
+if __name__ == '__main__':
+    socketio.run(app, debug=False, host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
+    
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
 socketio = SocketIO(app)
