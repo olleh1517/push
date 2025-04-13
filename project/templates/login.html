@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>로그인</title>
+  <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+    import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyB9LGrk-0WQXSk8D-2uWwRf55-srfZwjHE",
+    authDomain: "push-8f1dc.firebaseapp.com",
+    projectId: "push-8f1dc",
+    storageBucket: "push-8f1dc.firebasestorage.app",
+    messagingSenderId: "323708834561",
+    appId: "1:323708834561:web:48a59d3535778b67ff4100",
+    measurementId: "G-9FXX5CDVH7"
+};
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const socket = io();
+    let requestId = null;
+
+    window.loginRequest = async function () {
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+
+      try {
+        const userCred = await signInWithEmailAndPassword(auth, email, password);
+        const token = await userCred.user.getIdToken();
+
+        const res = await fetch('/request-login', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token })
+        });
+
+        requestId = (await res.json()).request_id;
+        document.getElementById('control').style.display = 'block';
+      } catch (error) {
+        alert('로그인 실패: ' + error.message);
+      }
+    }
+
+    window.respondLogin = async function (status) {
+      await fetch('/confirm-login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ request_id: requestId, status })
+      });
+      alert(status === 'approved' ? '로그인 승인됨' : '로그인 거절됨');
+    }
+  </script>
+</head>
+<body>
+  <h2>로그인</h2>
+  <input type="email" id="email" placeholder="이메일 입력"><br><br>
+  <input type="password" id="password" placeholder="비밀번호 입력"><br><br>
+  <button onclick="loginRequest()">로그인 요청</button>
+  <div id="control" style="display:none;">
+    <h3>로그인 승인 여부 선택</h3>
+    <button onclick="respondLogin('approved')">승인</button>
+    <button onclick="respondLogin('rejected')">거절</button>
+  </div>
+</body>
+</html>
