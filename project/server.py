@@ -3,16 +3,13 @@ from flask_socketio import SocketIO, emit
 import firebase_admin
 from firebase_admin import credentials, auth as firebase_auth
 from smtp_utils import send_verification_email
-import uuid, time, random
-import os
+import uuid, time, random, os
 
-if __name__ == '__main__':
-    socketio.run(app, debug=False, host='0.0.0.0', port=int(os.environ.get("PORT", 5000)))
-    
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
 socketio = SocketIO(app)
 
+# Firebase Admin SDK 초기화
 cred = credentials.Certificate("firebase-adminsdk.json")
 firebase_admin.initialize_app(cred)
 
@@ -89,22 +86,5 @@ def check_status(request_id):
     return jsonify({'status': req.get('status', 'unknown')})
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True)
-
-
-# smtp_utils.py
-import smtplib
-from email.mime.text import MIMEText
-
-GMAIL_USER = 'your_email@gmail.com'
-GMAIL_PASSWORD = 'your_app_password'
-
-def send_verification_email(to_email, code):
-    msg = MIMEText(f"인증코드는 다음과 같습니다:\n\n{code}")
-    msg['Subject'] = '회원가입 인증코드'
-    msg['From'] = GMAIL_USER
-    msg['To'] = to_email
-
-    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
-        server.login(GMAIL_USER, GMAIL_PASSWORD)
-        server.send_message(msg)
+    port = int(os.environ.get("PORT", 5000))
+    socketio.run(app, debug=False, host='0.0.0.0', port=port)
