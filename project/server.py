@@ -61,8 +61,10 @@ def verify_code():
 @app.route('/request-login', methods=['POST'])
 def request_login():
     token = request.json.get('token')
+    print("[DEBUG] 받은 토큰:", token)
     try:
         decoded = firebase_auth.verify_id_token(token)
+        print("[DEBUG] Firebase 인증 성공:", decoded)
         email = decoded['email']
         request_id = str(uuid.uuid4())
         login_requests[request_id] = {
@@ -73,6 +75,7 @@ def request_login():
         socketio.emit('login_request', {'request_id': request_id, 'email': email})
         return jsonify({'request_id': request_id})
     except Exception as e:
+        print("[ERROR] Firebase 인증 실패:", e)
         return jsonify({'error': str(e)}), 401
 
 @app.route('/confirm-login', methods=['POST'])
