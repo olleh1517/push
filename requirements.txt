@@ -2,3 +2,5 @@ Flask
 flask_socketio
 firebase_admin
 eventlet
+gunicorn
+
