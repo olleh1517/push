@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify, render_template, redirect
 from flask_socketio import SocketIO, emit
 import firebase_admin
 from firebase_admin import credentials, auth as firebase_auth
-from .smtp_utils import send_verification_email
+from smtp_utils import send_verification_email  # ✅ 수정된 import 경로
 import uuid, time, random, os
 import json
 
@@ -10,6 +10,7 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
 socketio = SocketIO(app)
 
+# ✅ Firebase Admin 초기화
 firebase_json = os.environ.get("FIREBASE_CREDENTIALS")
 if not firebase_json:
     raise ValueError("FIREBASE_CREDENTIALS 환경변수가 설정되어 있지 않습니다.")
@@ -18,7 +19,8 @@ cred_dict = json.loads(firebase_json)
 cred = credentials.Certificate(cred_dict)
 firebase_admin.initialize_app(cred)
 
-login_requests = {}   # Push 인증 요청 저장
+# ✅ 인증 요청 상태 저장용
+login_requests = {}   # push 인증 요청 저장
 pending_codes = {}    # 이메일 인증코드 저장
 
 @app.route('/')
@@ -52,8 +54,8 @@ def send_code():
 @app.route('/verify-code', methods=['POST'])
 def verify_code():
     data = request.json
-    email = data['email']
-    code = data['code']
+    email = data.get('email')
+    code = data.get('code')
     if pending_codes.get(email) == code:
         return jsonify({'status': 'ok'})
     return jsonify({'status': 'fail'})
@@ -62,9 +64,11 @@ def verify_code():
 def request_login():
     token = request.json.get('token')
     print("[DEBUG] 받은 토큰:", token)
+
     try:
         decoded = firebase_auth.verify_id_token(token)
         print("[DEBUG] Firebase 인증 성공:", decoded)
+
         email = decoded['email']
         request_id = str(uuid.uuid4())
         login_requests[request_id] = {
@@ -72,6 +76,8 @@ def request_login():
             'status': 'pending',
             'timestamp': time.time()
         }
+
+        # 실시간 로그인 요청 전송
         socketio.emit('login_request', {'request_id': request_id, 'email': email})
         return jsonify({'request_id': request_id})
     except Exception as e:
@@ -80,13 +86,18 @@ def request_login():
 
 @app.route('/confirm-login', methods=['POST'])
 def confirm_login():
-    data = request.json
-    request_id = data['request_id']
-    status = data['status']
+    data = request.json or {}
+    request_id = data.get('request_id')
+    status = data.get('status')
+
+    if not request_id or not status:
+        return jsonify({'result': 'fail', 'error': 'Missing request_id or status'}), 400
+
     if request_id in login_requests:
         login_requests[request_id]['status'] = status
         return jsonify({'result': 'ok'})
-    return jsonify({'result': 'fail'}), 400
+
+    return jsonify({'result': 'fail', 'error': 'Invalid request_id'}), 400
 
 @app.route('/check-status/<request_id>')
 def check_status(request_id):
