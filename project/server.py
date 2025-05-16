@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify, render_template, redirect
 from flask_socketio import SocketIO, emit
 import firebase_admin
 from firebase_admin import credentials, auth as firebase_auth
-from smtp_utils import send_verification_email
+from .smtp_utils import send_verification_email
 import uuid, time, random, os
 import json
 
