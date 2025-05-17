@@ -1,0 +1,12 @@
+Flask==2.3.3
+flask_socketio==5.3.6
+firebase_admin==6.4.0
+eventlet==0.33.3
+gunicorn==21.2.0
+
+# 의존성 충돌 방지를 위한 추가 패키지 고정
+google-auth==2.29.0
+google-auth-oauthlib==1.2.0
+requests==2.31.0
+urllib3==1.26.18
+certifi==2024.2.2
