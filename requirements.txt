@@ -1,6 +1,0 @@
-Flask
-flask_socketio
-firebase-admin
-gunicorn
-eventlet
-requests
