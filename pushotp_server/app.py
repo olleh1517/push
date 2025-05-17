@@ -245,50 +245,6 @@ def admin_page():
 @app.route('/login', methods=['GET'])
 def login_page():
     return render_template('login.html')
-
-
-@app.route('/login', methods=['POST'])
-def login_post():
-    data = request.json
-    email = data.get('email')
-    device_token = data.get('device_token')
-    status = data.get('status')
-    reason = data.get('reason', '')
-
-    log = {
-        'email': email,
-        'timestamp': datetime.datetime.utcnow().isoformat() + 'Z',
-        'status': status,
-        'reason': reason
-    }
-
-    user = users.get(email)
-    if not user:
-        log['status'] = 'fail'
-        log['reason'] = '등록되지 않은 사용자'
-        login_logs.append(log)
-        return jsonify({'status': 'fail', 'message': '사용자 없음'}), 403
-
-    if not user['approved']:
-        log['status'] = 'fail'
-        log['reason'] = '미승인 사용자'
-        login_logs.append(log)
-        return jsonify({'status': 'fail', 'message': '미승인 사용자'}), 403
-
-    if device_token not in user['device_tokens']:
-        log['status'] = 'fail'
-        log['reason'] = '기기 토큰 불일치'
-        login_logs.append(log)
-        return jsonify({'status': 'fail', 'message': '기기 불일치'}), 403
-
-    if status == 'success':
-        log['status'] = 'success'
-        login_logs.append(log)
-        return jsonify({'status': 'ok', 'message': '로그인 성공'})
-    else:
-        log['status'] = 'fail'
-        login_logs.append(log)
-        return jsonify({'status': 'fail', 'message': reason or '로그인 실패'})
     
 @app.route('/register-device', methods=['POST'])
 def register_device():
