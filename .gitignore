@@ -1,0 +1,10 @@
+# 하위 디렉토리에 있는 환경 변수 파일과 firebase 인증 키 제외
+pushotp_server/.env
+pushotp_server/firebase_credentials.json
+
+# 파이썬 캐시 제외
+__pycache__/
+*.pyc
+
+# IDE 설정 제외
+.vscode/
