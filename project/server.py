@@ -78,6 +78,7 @@ def request_login():
 @app.route('/confirm-login', methods=['POST'])
 def confirm_login():
     data = request.json
+    print('confirm-login 요청 데이터:', data)
     request_id = data['request_id']
     status = data['status']
     if request_id in login_requests:
