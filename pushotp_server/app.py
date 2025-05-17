@@ -99,6 +99,7 @@ def signup_post():
 
     code = str(random.randint(100000, 999999))
     pending_codes[email] = {'code': code, 'device_token': device_token}
+    print(email, code)
     send_verification_email(email, code)
 
     return jsonify({'message': '인증코드를 이메일로 보냈습니다.'})
