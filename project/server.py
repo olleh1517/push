@@ -2,10 +2,34 @@ from flask import Flask, request, jsonify, render_template, redirect
 from flask_socketio import SocketIO, emit
 import firebase_admin
 from firebase_admin import credentials, auth as firebase_auth
+from firebase_admin._token_gen import CertificateFetchError
 from .smtp_utils import send_verification_email
 import uuid, time, random, os, json, traceback
-from firebase_admin._token_gen import CertificateFetchError
 
+# ✅ Firebase 인증서 요청 타임아웃 설정
+import requests
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
+
+class TimeoutHTTPAdapter(HTTPAdapter):
+    def __init__(self, *args, **kwargs):
+        self.timeout = kwargs.pop("timeout", 5)
+        super().__init__(*args, **kwargs)
+
+    def send(self, request, **kwargs):
+        kwargs["timeout"] = kwargs.get("timeout", self.timeout)
+        return super().send(request, **kwargs)
+
+session = requests.Session()
+adapter = TimeoutHTTPAdapter(timeout=5)
+session.mount("https://", adapter)
+session.mount("http://", adapter)
+
+# ⛏️ firebase_admin 내부 HTTP 요청 세션에 타임아웃 세션 적용
+import firebase_admin._http_client
+firebase_admin._http_client.requests = session
+
+# ✅ Flask 앱 초기화
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
 socketio = SocketIO(app)
@@ -18,7 +42,6 @@ if not firebase_json:
 cred_dict = json.loads(firebase_json)
 cred = credentials.Certificate(cred_dict)
 
-# 중복 초기화 방지
 if not firebase_admin._apps:
     firebase_admin.initialize_app(cred)
 
