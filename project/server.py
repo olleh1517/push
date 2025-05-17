@@ -25,9 +25,8 @@ adapter = TimeoutHTTPAdapter(timeout=5)
 session.mount("https://", adapter)
 session.mount("http://", adapter)
 
-# ⛏️ firebase_admin 내부 HTTP 요청 세션에 타임아웃 세션 적용
-import firebase_admin._http_client
-firebase_admin._http_client.requests = session
+# ⛏️ firebase_admin 내부 HTTP 요청 세션에 타임아웃 세션 적용 시도는 제거
+# firebase_admin._http_client.requests = session  # <- 이 줄 삭제
 
 # ✅ Flask 앱 초기화
 app = Flask(__name__)
