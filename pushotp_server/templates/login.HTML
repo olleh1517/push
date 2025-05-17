@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>로그인 (이메일+비밀번호+기기 토큰)</title>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyCYvJ0zPJ1JQpS9A3VsDd3c_U059ZAY12w",
+      authDomain: "pushotp-49168.firebaseapp.com",
+      projectId: "pushotp-49168",
+      storageBucket: "pushotp-49168.firebasestorage.app",
+      messagingSenderId: "335414278200",
+      appId: "1:335414278200:web:e4ca22178af1834ca84ecd",
+      measurementId: "G-H1FK55D42Q"
+    };
+    firebase.initializeApp(firebaseConfig);
+  </script>
+</head>
+<body>
+  <h1>로그인</h1>
+
+  <form id="loginForm">
+    <label for="email">이메일:</label>
+    <input type="email" id="email" name="email" required />
+    <br />
+    <label for="password">비밀번호:</label>
+    <input type="password" id="password" name="password" required />
+    <br />
+
+    <button type="submit" id="loginBtn">로그인</button>
+    <button type="button" id="registerDeviceBtn" style="display:none;">현재 기기 등록</button>
+  </form>
+
+  <p>
+    <span id="toggleRegister" style="color:blue; text-decoration:underline; cursor:pointer;">
+      새로운 기기를 등록하시겠습니까?
+    </span>
+  </p>
+
+  <div id="welcomeSection" style="display:none;">
+    <h2 id="welcomeMessage"></h2>
+    <button id="logoutBtn">로그아웃</button>
+  </div>
+
+  <p id="message" style="color:red;"></p>
+
+  <script>
+    const loginForm = document.getElementById('loginForm');
+    const loginBtn = document.getElementById('loginBtn');
+    const registerDeviceBtn = document.getElementById('registerDeviceBtn');
+    const toggleRegister = document.getElementById('toggleRegister');
+    const messageP = document.getElementById('message');
+    const welcomeSection = document.getElementById('welcomeSection');
+    const welcomeMessage = document.getElementById('welcomeMessage');
+    const logoutBtn = document.getElementById('logoutBtn');
+
+    let isRegisteringDevice = false;
+
+    // device_token 가져오기 또는 생성
+    function getOrCreateDeviceToken() {
+      let token = localStorage.getItem('device_token');
+      if (!token) {
+        if (crypto && crypto.randomUUID) {
+          token = crypto.randomUUID();
+        } else {
+          token = 'xxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+            const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+          });
+        }
+        localStorage.setItem('device_token', token);
+      }
+      return token;
+    }
+
+    toggleRegister.addEventListener('click', () => {
+      isRegisteringDevice = !isRegisteringDevice;
+      if (isRegisteringDevice) {
+        loginBtn.style.display = 'none';
+        registerDeviceBtn.style.display = 'inline-block';
+        toggleRegister.textContent = '기기 등록 취소';
+        messageP.textContent = '';
+      } else {
+        loginBtn.style.display = 'inline-block';
+        registerDeviceBtn.style.display = 'none';
+        toggleRegister.textContent = '새로운 기기를 등록하시겠습니까?';
+        messageP.textContent = '';
+      }
+    });
+
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (isRegisteringDevice) return; // 로그인 시도 방지 (등록 모드일 때)
+
+      const email = loginForm.email.value;
+      const password = loginForm.password.value;
+      const deviceToken = getOrCreateDeviceToken();
+
+      try {
+        const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
+        console.log('Firebase 로그인 성공:', userCredential.user);
+
+        // 서버에 로그인 정보 전송
+        const res = await fetch('/login', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            email: email,
+            device_token: deviceToken,
+            status: 'success',
+            reason: null
+          })
+        });
+
+        const data = await res.json();
+        if(res.ok && data.status === 'ok') {
+          welcomeMessage.textContent = `${email}님 환영합니다!`;
+          welcomeSection.style.display = 'block';
+          loginForm.style.display = 'none';
+          messageP.textContent = '';
+        } else {
+          messageP.textContent = data.message || '로그인 실패: 서버 인증 실패';
+          await firebase.auth().signOut();
+        }
+
+      } catch (error) {
+        console.error('Firebase 로그인 실패:', error);
+
+        await fetch('/login', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            email: email,
+            device_token: getOrCreateDeviceToken(),
+            status: 'fail',
+            reason: error.message
+          })
+        });
+
+        messageP.textContent = '로그인 실패: ' + error.message;
+      }
+    });
+
+    registerDeviceBtn.addEventListener('click', async () => {
+      const email = loginForm.email.value;
+      const password = loginForm.password.value;
+      const deviceToken = getOrCreateDeviceToken();
+
+      if (!email || !password) {
+        messageP.textContent = '이메일과 비밀번호를 입력하세요.';
+        return;
+      }
+
+      // 새로운 기기 등록 요청 API 호출
+      try {
+        const res = await fetch('/register-device', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({email, password, device_token: deviceToken})
+        });
+
+        const data = await res.json();
+
+        if(res.ok && data.status === 'pending') {
+          messageP.style.color = 'green';
+          messageP.textContent = '기기 등록 신청 완료. 관리자의 승인을 기다려 주세요.';
+          setTimeout(() => {
+            messageP.textContent = '';
+            isRegisteringDevice = false;
+            loginBtn.style.display = 'inline-block';
+            registerDeviceBtn.style.display = 'none';
+            toggleRegister.textContent = '새로운 기기를 등록하시겠습니까?';
+            loginForm.reset();
+          }, 3000);
+        } else if(res.ok && data.status === 'already_registered') {
+          messageP.style.color = 'red';
+          messageP.textContent = '이미 등록된 기기입니다.';
+        } else {
+          messageP.style.color = 'red';
+          messageP.textContent = data.message || '기기 등록 실패';
+        }
+      } catch (error) {
+        messageP.style.color = 'red';
+        messageP.textContent = '기기 등록 실패: ' + error.message;
+      }
+    });
+
+    logoutBtn.addEventListener('click', async () => {
+      try {
+        await firebase.auth().signOut();
+        welcomeSection.style.display = 'none';
+        loginForm.style.display = 'block';
+        messageP.style.color = 'black';
+        messageP.textContent = '로그아웃 되었습니다.';
+      } catch (error) {
+        console.error('로그아웃 실패:', error);
+        messageP.style.color = 'red';
+        messageP.textContent = '로그아웃 실패: ' + error.message;
+      }
+    });
+  </script>
+</body>
+</html>

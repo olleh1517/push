@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>관리자 - 가입 승인 요청</title>
+  <script>
+    async function approveUser(button) {
+      const tr = button.closest('tr');
+      const email = tr.dataset.email;
+
+      try {
+        const res = await fetch('/commit/approve-user', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({email})
+        });
+        const data = await res.json();
+        if(res.ok && data.status === 'ok') {
+          alert(`${email} 님의 승인이 완료되었습니다.`);
+          tr.remove();
+          checkEmptyTable();
+        } else {
+          alert('승인 실패: ' + (data.message || '알 수 없는 오류'));
+        }
+      } catch(e) {
+        alert('승인 처리 중 오류가 발생했습니다.');
+        console.error(e);
+      }
+    }
+
+    async function rejectUser(button) {
+      const tr = button.closest('tr');
+      const email = tr.dataset.email;
+
+      try {
+        const res = await fetch('/commit/reject-user', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({email})
+        });
+        const data = await res.json();
+        if(res.ok && data.status === 'ok') {
+          alert(`${email} 님의 가입 요청이 거부되었습니다.`);
+          tr.remove();
+          checkEmptyTable();
+        } else {
+          alert('거부 실패: ' + (data.message || '알 수 없는 오류'));
+        }
+      } catch(e) {
+        alert('거부 처리 중 오류가 발생했습니다.');
+        console.error(e);
+      }
+    }
+
+    function checkEmptyTable() {
+      const tbody = document.querySelector('tbody');
+      if(tbody.children.length === 0) {
+        const noDataRow = document.createElement('tr');
+        noDataRow.innerHTML = `<td colspan="3" style="text-align:center;">승인 대기 중인 사용자가 없습니다.</td>`;
+        tbody.appendChild(noDataRow);
+      }
+    }
+  </script>
+</head>
+<body>
+  <h1>가입 승인 요청 목록</h1>
+  <table border="1" cellpadding="8" cellspacing="0" style="width:100%; max-width:600px;">
+    <thead>
+      <tr>
+        <th>이메일</th>
+        <th>기기 토큰</th>
+        <th>승인 / 거부</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% if pending_users %}
+        {% for email, info in pending_users.items() %}
+        <tr data-email="{{ email }}">
+          <td>{{ email }}</td>
+          <td>{{ info.device_tokens[0] }}</td>
+          <td>
+            <button onclick="approveUser(this)">승인</button>
+            <button onclick="rejectUser(this)">거부</button>
+          </td>
+        </tr>
+        {% endfor %}
+      {% else %}
+        <tr>
+          <td colspan="3" style="text-align:center;">승인 대기 중인 사용자가 없습니다.</td>
+        </tr>
+      {% endif %}
+    </tbody>
+  </table>
+</body>
+</html>

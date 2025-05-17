@@ -1,10 +1,12 @@
-# 하위 디렉토리에 있는 환경 변수 파일과 firebase 인증 키 제외
+# 환경변수 파일
 pushotp_server/.env
+
+# Firebase 자격증명 파일
 pushotp_server/firebase_credentials.json
 
-# 파이썬 캐시 제외
+# 가상환경 폴더
+pushotp_server/venv/
+
+# Pycache
 __pycache__/
 *.pyc
-
-# IDE 설정 제외
-.vscode/
