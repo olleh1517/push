@@ -4,6 +4,7 @@ import firebase_admin
 from firebase_admin import credentials, auth as firebase_auth
 from .smtp_utils import send_verification_email
 import uuid, time, random, os, json, traceback
+from firebase_admin._token_gen import CertificateFetchError
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
@@ -82,6 +83,9 @@ def request_login():
         # 실시간 로그인 요청 전송
         socketio.emit('login_request', {'request_id': request_id, 'email': email})
         return jsonify({'request_id': request_id})
+    except CertificateFetchError as e:
+        print("[ERROR] 인증서 서버 연결 실패:", e)
+        return jsonify({'error': 'Google 인증서 서버와 연결되지 않았습니다. 잠시 후 다시 시도해 주세요.'}), 503
 
     except Exception as e:
         print("[ERROR] Firebase 인증 실패:", repr(e))
