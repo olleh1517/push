@@ -2,6 +2,7 @@ import os
 import random
 import datetime
 import smtplib
+import requests
 from email.mime.text import MIMEText
 from flask import Flask, request, jsonify, render_template, redirect
 import firebase_admin
@@ -13,15 +14,12 @@ load_dotenv()
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'default_secret_key')
 
-# Render에 업로드된 Secret File 경로
 firebase_credentials_path = "/etc/secrets/firebase_credentials.json"
-
-# 그대로 초기화
 cred = credentials.Certificate(firebase_credentials_path)
 firebase_admin.initialize_app(cred)
 
-pending_codes = {}  # 이메일: 인증코드 및 임시 토큰 저장
-users = {}  # users[email] = {"device_tokens": [...], "approved": bool, "password": "..."}
+pending_codes = {}
+users = {}
 login_logs = []
 
 SMTP_SERVER = 'smtp.gmail.com'
@@ -30,50 +28,63 @@ SMTP_EMAIL = os.getenv('SMTP_EMAIL')
 SMTP_PASSWORD = os.getenv('SMTP_PASSWORD')
 ADMIN_EMAIL = os.getenv('ADMIN_EMAIL')
 
+def get_ip_location(ip):
+    try:
+        res = requests.get(f"https://ipapi.co/{ip}/json/")
+        if res.status_code == 200:
+            data = res.json()
+            return {
+                'ip': ip,
+                'city': data.get('city'),
+                'region': data.get('region'),
+                'country': data.get('country_name'),
+                'latitude': data.get('latitude'),
+                'longitude': data.get('longitude'),
+            }
+    except Exception as e:
+        print(f"IP 위치 조회 실패: {e}")
+    return {'ip': ip}
+
+def send_email(to, subject, body):
+    msg = MIMEText(body)
+    msg['Subject'] = subject
+    msg['From'] = SMTP_EMAIL
+    msg['To'] = to
+    try:
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+            server.starttls()
+            server.login(SMTP_EMAIL, SMTP_PASSWORD)
+            server.sendmail(SMTP_EMAIL, to, msg.as_string())
+    except Exception as e:
+        print(f"[메일발송 실패] {e}")
 
 def send_verification_email(email, code):
     subject = "회원가입 인증 코드"
     body = f"인증 코드: {code}"
-    msg = MIMEText(body)
-    msg['Subject'] = subject
-    msg['From'] = SMTP_EMAIL
-    msg['To'] = email
-    try:
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-            server.starttls()
-            server.login(SMTP_EMAIL, SMTP_PASSWORD)
-            server.sendmail(SMTP_EMAIL, email, msg.as_string())
-        print(f"[메일발송 성공] {email} 에 인증코드 {code} 전송됨")
-    except Exception as e:
-        print(f"[메일발송 실패] {e}")
-
+    send_email(email, subject, body)
 
 def send_admin_approval_email(email, device_token):
     subject = "회원가입 승인 요청"
     body = f"이메일: {email}\n기기 토큰: {device_token}\n\n관리자 페이지에서 승인을 진행해주세요."
-    msg = MIMEText(body)
-    msg['Subject'] = subject
-    msg['From'] = SMTP_EMAIL
-    msg['To'] = ADMIN_EMAIL
-    try:
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-            server.starttls()
-            server.login(SMTP_EMAIL, SMTP_PASSWORD)
-            server.sendmail(SMTP_EMAIL, ADMIN_EMAIL, msg.as_string())
-        print(f"[관리자 승인 요청 메일 발송 성공] {ADMIN_EMAIL} 에 전송됨")
-    except Exception as e:
-        print(f"[메일발송 실패] {e}")
+    send_email(ADMIN_EMAIL, subject, body)
 
+def send_security_alert(email, location_info):
+    subject = "보안 경고: 허가되지 않은 기기에서 로그인 시도"
+    body = f"""
+이메일: {email}
+IP: {location_info['ip']}
+위치: {location_info.get('city')}, {location_info.get('region')}, {location_info.get('country')}
+시간: {datetime.datetime.utcnow().isoformat()} UTC
+"""
+    send_email(email, subject, body)
 
 @app.route('/')
 def index():
     return redirect('/signup')
 
-
 @app.route('/signup', methods=['GET'])
 def signup_page():
     return render_template('signup.html')
-
 
 @app.route('/signup', methods=['POST'])
 def signup_post():
@@ -83,7 +94,6 @@ def signup_post():
 
     if not email or not device_token:
         return jsonify({'error': '이메일과 기기 토큰이 필요합니다.'}), 400
-
     if email in users or email in pending_codes:
         return jsonify({'error': '이미 인증 중이거나 가입된 이메일입니다.'}), 400
 
@@ -92,7 +102,6 @@ def signup_post():
     send_verification_email(email, code)
 
     return jsonify({'message': '인증코드를 이메일로 보냈습니다.'})
-
 
 @app.route('/verify-email', methods=['POST'])
 def verify_email():
@@ -111,21 +120,43 @@ def verify_email():
     users[email] = {
         "device_tokens": [pending['device_token']],
         "approved": False,
-        "password": password  # Firebase 등록은 승인 후에
+        "password": password
     }
     del pending_codes[email]
     send_admin_approval_email(email, users[email]['device_tokens'][0])
     return jsonify({'status': 'pending', 'message': '가입 신청 완료. 승인을 기다려 주세요.'})
 
-
-@app.route('/check-approval', methods=['POST'])
-def check_approval():
-    data = request.get_json()
+@app.route('/login', methods=['POST'])
+def login_post():
+    data = request.json
     email = data.get('email')
-    user_info = users.get(email)
-    if not user_info:
-        return jsonify({'status': 'fail', 'message': '사용자 없음'}), 404
-    return jsonify({'status': 'approved' if user_info['approved'] else 'pending'})
+    device_token = data.get('device_token')
+    ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+
+    user = users.get(email)
+    log = {'email': email, 'timestamp': datetime.datetime.utcnow().isoformat() + 'Z'}
+
+    if not user:
+        log['status'] = 'fail'
+        log['reason'] = '사용자 없음'
+        login_logs.append(log)
+        return jsonify({'status': 'fail', 'message': '사용자 없음'}), 403
+    if not user['approved']:
+        log['status'] = 'fail'
+        log['reason'] = '미승인 사용자'
+        login_logs.append(log)
+        return jsonify({'status': 'fail', 'message': '미승인 사용자'}), 403
+    if device_token not in user['device_tokens']:
+        location = get_ip_location(ip)
+        send_security_alert(email, location)
+        log['status'] = 'fail'
+        log['reason'] = '기기 불일치'
+        login_logs.append(log)
+        return jsonify({'status': 'fail', 'message': '기기 불일치'}), 403
+
+    log['status'] = 'success'
+    login_logs.append(log)
+    return jsonify({'status': 'ok', 'message': '로그인 성공'})
 
 @app.route('/commit', methods=['GET', 'POST'])
 def commit_page():
