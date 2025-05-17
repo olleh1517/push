@@ -6,28 +6,6 @@ from firebase_admin._token_gen import CertificateFetchError
 from .smtp_utils import send_verification_email
 import uuid, time, random, os, json, traceback
 
-# ✅ Firebase 인증서 요청 타임아웃 설정
-import requests
-from requests.adapters import HTTPAdapter
-from requests.packages.urllib3.util.retry import Retry
-
-class TimeoutHTTPAdapter(HTTPAdapter):
-    def __init__(self, *args, **kwargs):
-        self.timeout = kwargs.pop("timeout", 5)
-        super().__init__(*args, **kwargs)
-
-    def send(self, request, **kwargs):
-        kwargs["timeout"] = kwargs.get("timeout", self.timeout)
-        return super().send(request, **kwargs)
-
-session = requests.Session()
-adapter = TimeoutHTTPAdapter(timeout=5)
-session.mount("https://", adapter)
-session.mount("http://", adapter)
-
-# ⛏️ firebase_admin 내부 HTTP 요청 세션에 타임아웃 세션 적용 시도는 제거
-# firebase_admin._http_client.requests = session  # <- 이 줄 삭제
-
 # ✅ Flask 앱 초기화
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
@@ -45,8 +23,8 @@ if not firebase_admin._apps:
     firebase_admin.initialize_app(cred)
 
 # ✅ 인증 상태 저장용
-login_requests = {}   # push 인증 요청 저장
-pending_codes = {}    # 이메일 인증코드 저장
+login_requests = {}
+pending_codes = {}
 
 @app.route('/')
 def index():
@@ -90,29 +68,36 @@ def request_login():
     token = request.json.get('token')
     print("[DEBUG] 받은 토큰:", token)
 
-    try:
-        decoded = firebase_auth.verify_id_token(token)
-        print("[DEBUG] Firebase 인증 성공:", decoded)
+    decoded = None
+    # CertificateFetchError 시 최대 5회 재시도
+    for attempt in range(1, 6):
+        try:
+            decoded = firebase_auth.verify_id_token(token)
+            print(f"[DEBUG] Firebase 인증 성공 (attempt {attempt}):", decoded)
+            break
+        except CertificateFetchError as e:
+            print(f"[WARN] 인증서 서버 연결 실패 (attempt {attempt}):", e)
+            backoff = attempt  # 1s, 2s, 3s, ...
+            time.sleep(backoff)
+        except Exception as e:
+            print("[ERROR] Firebase 인증 실패:", repr(e))
+            traceback.print_exc()
+            return jsonify({'error': 'Firebase 인증 오류 발생'}), 401
 
-        email = decoded.get('email')
-        request_id = str(uuid.uuid4())
-        login_requests[request_id] = {
-            'email': email,
-            'status': 'pending',
-            'timestamp': time.time()
-        }
-
-        # 실시간 로그인 요청 전송
-        socketio.emit('login_request', {'request_id': request_id, 'email': email})
-        return jsonify({'request_id': request_id})
-    except CertificateFetchError as e:
-        print("[ERROR] 인증서 서버 연결 실패:", e)
+    if decoded is None:
+        # 다섯 번 모두 실패했을 때
         return jsonify({'error': 'Google 인증서 서버와 연결되지 않았습니다. 잠시 후 다시 시도해 주세요.'}), 503
 
-    except Exception as e:
-        print("[ERROR] Firebase 인증 실패:", repr(e))
-        traceback.print_exc()
-        return jsonify({'error': 'Firebase 인증 오류 발생'}), 401
+    # 토큰이 정상 디코딩된 경우
+    email = decoded.get('email')
+    request_id = str(uuid.uuid4())
+    login_requests[request_id] = {
+        'email': email,
+        'status': 'pending',
+        'timestamp': time.time()
+    }
+    socketio.emit('login_request', {'request_id': request_id, 'email': email})
+    return jsonify({'request_id': request_id})
 
 @app.route('/confirm-login', methods=['POST'])
 def confirm_login():
