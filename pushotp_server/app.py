@@ -127,6 +127,17 @@ def check_approval():
         return jsonify({'status': 'fail', 'message': '사용자 없음'}), 404
     return jsonify({'status': 'approved' if user_info['approved'] else 'pending'})
 
+@app.route('/commit', methods=['GET', 'POST'])
+def commit_page():
+    pending_users = {email: info for email, info in users.items() if not info['approved']}
+    pending_devices = {
+        email: info['pending_device_tokens']
+        for email, info in users.items()
+        if info.get('approved') and info.get('pending_device_tokens')
+    }
+
+    return render_template('commit.html', pending_users=pending_users, pending_devices=pending_devices)
+
 
 @app.route('/commit/approve-user', methods=['POST'])
 def approve_user():
@@ -163,15 +174,35 @@ def reject_user():
     return jsonify({'status': 'ok', 'message': '가입 요청 거부됨'})
 
 
-@app.route('/commit', methods=['GET', 'POST'])
-def commit_page():
-    pending_users = {email: info for email, info in users.items() if not info['approved']}
-    if request.method == 'POST':
-        email = request.form.get('email')
-        if email in users:
-            users[email]['approved'] = True
-        return redirect('/commit')
-    return render_template('commit.html', pending_users=pending_users)
+@app.route('/commit/approve-device', methods=['POST'])
+def approve_device():
+    data = request.get_json()
+    email = data.get('email')
+    device_token = data.get('device_token')
+
+    user = users.get(email)
+    if not user or device_token not in user.get('pending_device_tokens', []):
+        return jsonify({'status': 'fail', 'message': '승인 대상이 올바르지 않습니다.'}), 400
+
+    user['device_tokens'].append(device_token)
+    user['pending_device_tokens'].remove(device_token)
+
+    return jsonify({'status': 'ok', 'message': '기기 등록 승인됨'})
+
+
+@app.route('/commit/reject-device', methods=['POST'])
+def reject_device():
+    data = request.get_json()
+    email = data.get('email')
+    device_token = data.get('device_token')
+
+    user = users.get(email)
+    if not user or device_token not in user.get('pending_device_tokens', []):
+        return jsonify({'status': 'fail', 'message': '거부 대상이 올바르지 않습니다.'}), 400
+
+    user['pending_device_tokens'].remove(device_token)
+
+    return jsonify({'status': 'ok', 'message': '기기 등록 거부됨'})
 
 
 @app.route('/admin')
