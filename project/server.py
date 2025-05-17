@@ -3,8 +3,7 @@ from flask_socketio import SocketIO, emit
 import firebase_admin
 from firebase_admin import credentials, auth as firebase_auth
 from .smtp_utils import send_verification_email
-import uuid, time, random, os
-import json
+import uuid, time, random, os, json, traceback
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
@@ -17,9 +16,12 @@ if not firebase_json:
 
 cred_dict = json.loads(firebase_json)
 cred = credentials.Certificate(cred_dict)
-firebase_admin.initialize_app(cred)
 
-# ✅ 인증 요청 상태 저장용
+# 중복 초기화 방지
+if not firebase_admin._apps:
+    firebase_admin.initialize_app(cred)
+
+# ✅ 인증 상태 저장용
 login_requests = {}   # push 인증 요청 저장
 pending_codes = {}    # 이메일 인증코드 저장
 
@@ -69,7 +71,7 @@ def request_login():
         decoded = firebase_auth.verify_id_token(token)
         print("[DEBUG] Firebase 인증 성공:", decoded)
 
-        email = decoded['email']
+        email = decoded.get('email')
         request_id = str(uuid.uuid4())
         login_requests[request_id] = {
             'email': email,
@@ -80,9 +82,11 @@ def request_login():
         # 실시간 로그인 요청 전송
         socketio.emit('login_request', {'request_id': request_id, 'email': email})
         return jsonify({'request_id': request_id})
+
     except Exception as e:
-        print("[ERROR] Firebase 인증 실패:", e)
-        return jsonify({'error': str(e)}), 401
+        print("[ERROR] Firebase 인증 실패:", repr(e))
+        traceback.print_exc()
+        return jsonify({'error': 'Firebase 인증 오류 발생'}), 401
 
 @app.route('/confirm-login', methods=['POST'])
 def confirm_login():
