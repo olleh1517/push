@@ -14,4 +14,3 @@ def send_verification_email(to_email, code):
     with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
         server.login(GMAIL_USER, GMAIL_PASSWORD)
         server.send_message(msg)
-# 변경테스트dddd
