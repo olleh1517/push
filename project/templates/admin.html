@@ -5,7 +5,7 @@
   <title>관리자 로그인 승인 모니터링</title>
   <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
   <script>
-    const adminSocket = io("https://push-otp-test.onrender.com");
+    const adminSocket = io();
 
     adminSocket.on('login_request', function(data) {
       const list = document.getElementById('request-list');
