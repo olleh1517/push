@@ -9,6 +9,7 @@ from flask import Flask, request, jsonify, render_template, redirect
 import firebase_admin
 from firebase_admin import credentials, auth as firebase_auth, firestore
 from dotenv import load_dotenv
+from datetime import datetime, timedelta
 
 load_dotenv()
 
@@ -141,6 +142,21 @@ def increment_fail_in_firestore(email, reason):
         # 실패 횟수 초기화
         doc_ref.set({'count': 0}, merge=True)
 
+def is_login_blocked(email):
+    doc = db.collection('failed_attempts').document(email).get()
+    if not doc.exists:
+        return False
+
+    data = doc.to_dict()
+    count = data.get('count', 0)
+    last_failed_at = data.get('last_failed_at')
+
+    if count >= 3 and last_failed_at:
+        elapsed = datetime.utcnow() - last_failed_at.replace(tzinfo=None)
+        if elapsed < timedelta(minutes=5):
+            return True
+    return False
+
 
 @app.route('/')
 def index():
@@ -248,6 +264,7 @@ def login_post():
         'status': status or 'unknown',
         'reason': reason or 'unknown'
     }
+    
 
     # ✅ 1. 클라이언트 측 실패 정보 수신 시 로그만 저장
     if status == 'fail':
@@ -260,6 +277,9 @@ def login_post():
         log['reason'] = 'admin_login'
         login_logs.append(log)
         return jsonify({'status': 'ok', 'message': '관리자 로그인 성공'})
+    
+    if is_login_blocked(email):
+        return jsonify({'status': 'fail', 'message': '로그인 실패가 반복되어 5분간 로그인할 수 없습니다.'}), 403
 
     # ✅ 3. 일반 사용자 로그인 검증
     user = get_user(email)
@@ -298,6 +318,7 @@ def login_post():
     log['status'] = 'success'
     log['reason'] = 'login_success'
     login_logs.append(log)
+    db.collection('failed_attempts').document(email).delete()
     return jsonify({'status': 'ok', 'message': '로그인 성공'})
 
 
