@@ -95,13 +95,6 @@
       const password = loginForm.password.value;
       const deviceToken = getOrCreateDeviceToken();
 
-      // 👉 미리 창 두 개를 열어 둠 (blank 페이지로)
-      let adminWin, commitWin;
-      if (email === 'admin123@naver.com') {
-        adminWin = window.open('', '_blank');
-        commitWin = window.open('', '_blank');
-      }
-
       const res = await fetch('/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -109,12 +102,9 @@
       });
 
       const data = await res.json();
-
       if (res.ok && data.status === 'ok') {
         if (email === 'admin123@naver.com') {
-          // 👉 미리 연 창에 페이지 로드
-          if (adminWin) adminWin.location.href = '/admin';
-          if (commitWin) commitWin.location.href = '/commit';
+          window.open('/admin', '_blank');
           messageP.textContent = '관리자 로그인 성공! 새 창에서 열렸습니다.';
         } else {
           welcomeMessage.textContent = `${email}님 환영합니다!`;
