@@ -64,7 +64,6 @@
 
     let isRegisteringDevice = false;
 
-    // device_token 가져오기 또는 생성
     function getOrCreateDeviceToken() {
       let token = localStorage.getItem('device_token');
       if (!token) {
@@ -83,77 +82,47 @@
 
     toggleRegister.addEventListener('click', () => {
       isRegisteringDevice = !isRegisteringDevice;
-      if (isRegisteringDevice) {
-        loginBtn.style.display = 'none';
-        registerDeviceBtn.style.display = 'inline-block';
-        toggleRegister.textContent = '기기 등록 취소';
-        messageP.textContent = '';
-      } else {
-        loginBtn.style.display = 'inline-block';
-        registerDeviceBtn.style.display = 'none';
-        toggleRegister.textContent = '새로운 기기를 등록하시겠습니까?';
-        messageP.textContent = '';
-      }
+      loginBtn.style.display = isRegisteringDevice ? 'none' : 'inline-block';
+      registerDeviceBtn.style.display = isRegisteringDevice ? 'inline-block' : 'none';
+      toggleRegister.textContent = isRegisteringDevice ? '기기 등록 취소' : '새로운 기기를 등록하시겠습니까?';
+      messageP.textContent = '';
     });
 
     loginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      if (isRegisteringDevice) return; // 로그인 시도 방지 (등록 모드일 때)
+      if (isRegisteringDevice) return;
 
       const email = loginForm.email.value;
       const password = loginForm.password.value;
       const deviceToken = getOrCreateDeviceToken();
 
       if (email === 'admin123@naver.com' && password === 'admin123') {
-        try {
-        // Firebase 로그인 시도
-        const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
-
-        // 서버에도 로그인 요청 (서버에서 기기 토큰 체크 등)
         const res = await fetch('/login', {
           method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({
-            email: email,
-            assword: password, // admin도 서버 bcrypt 검사 받도록!
-            device_token: deviceToken
-          })
-    });
-
-    const data = await res.json();
-    if (res.ok && data.status === 'ok') {
-      window.open('/admin', '_blank');  // 🟢 새 탭으로 관리자 페이지 열기
-      messageP.textContent = '관리자 로그인 성공! 새 창에서 열렸습니다.';
-    } else {
-      messageP.textContent = data.message || '관리자 로그인 실패';
-      await firebase.auth().signOut(); // 실패시 로그아웃
-    }
-  } catch (err) {
-    messageP.textContent = '관리자 로그인 실패: ' + err.message;
-  }
-
-  return;
-    }
-
-      try {
-        const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
-        console.log('Firebase 로그인 성공:', userCredential.user);
-
-        // 서버에 로그인 정보 전송
-        const res = await fetch('/login', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({
-            email: email,
-            device_token: deviceToken,
-            status: 'success',
-            password: password,
-            reason: null
-          })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, device_token: deviceToken })
         });
 
         const data = await res.json();
-        if(res.ok && data.status === 'ok') {
+        if (res.ok && data.status === 'ok') {
+          window.open('/admin', '_blank');
+          messageP.textContent = '관리자 로그인 성공! 새 창에서 열렸습니다.';
+        } else {
+          messageP.textContent = data.message || '관리자 로그인 실패';
+        }
+        return;
+      }
+
+      try {
+        await firebase.auth().signInWithEmailAndPassword(email, password);
+        const res = await fetch('/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, device_token: deviceToken })
+        });
+
+        const data = await res.json();
+        if (res.ok && data.status === 'ok') {
           welcomeMessage.textContent = `${email}님 환영합니다!`;
           welcomeSection.style.display = 'block';
           loginForm.style.display = 'none';
@@ -162,22 +131,12 @@
           messageP.textContent = data.message || '로그인 실패: 서버 인증 실패';
           await firebase.auth().signOut();
         }
-
       } catch (error) {
-        console.error('Firebase 로그인 실패:', error);
-
         await fetch('/login', {
           method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({
-            email: email,
-            device_token: getOrCreateDeviceToken(),
-            status: 'fail',
-            password: password,
-            reason: error.message
-          })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, device_token: deviceToken, status: 'fail', reason: error.message })
         });
-
         messageP.textContent = '로그인 실패: ' + error.message;
       }
     });
@@ -192,17 +151,15 @@
         return;
       }
 
-      // 새로운 기기 등록 요청 API 호출
       try {
         const res = await fetch('/register-device', {
           method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({email, password, device_token: deviceToken})
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, device_token: deviceToken })
         });
 
         const data = await res.json();
-
-        if(res.ok && data.status === 'pending') {
+        if (res.ok && data.status === 'pending') {
           messageP.style.color = 'green';
           messageP.textContent = '기기 등록 신청 완료. 관리자의 승인을 기다려 주세요.';
           setTimeout(() => {
@@ -213,9 +170,6 @@
             toggleRegister.textContent = '새로운 기기를 등록하시겠습니까?';
             loginForm.reset();
           }, 3000);
-        } else if(res.ok && data.status === 'already_registered') {
-          messageP.style.color = 'red';
-          messageP.textContent = '이미 등록된 기기입니다.';
         } else {
           messageP.style.color = 'red';
           messageP.textContent = data.message || '기기 등록 실패';
@@ -242,4 +196,3 @@
   </script>
 </body>
 </html>
-
