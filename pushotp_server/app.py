@@ -80,7 +80,7 @@ IP: {location_info['ip']}
 
 @app.route('/')
 def index():
-    return redirect('/signup')
+    return redirect('/login')
 
 @app.route('/signup', methods=['GET'])
 def signup_page():
