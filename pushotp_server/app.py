@@ -41,11 +41,12 @@ def save_user(email, data):
     db.collection('users').document(email).set(data)
 
 def get_user(email):
-    doc = db.collection('users').document(email).get()
-    if doc.exists:
-        user = doc.to_dict()
-        print("[Firestore 유저 로드]", user)  # 🔍 여기에 로그 추가
-        return user
+    try:
+        doc = db.collection('users').document(email).get()
+        if doc.exists:
+            return doc.to_dict()
+    except Exception as e:
+        print(f"[get_user 오류] {email} 조회 중 예외 발생: {e}")
     return None
 
 
@@ -103,7 +104,17 @@ def get_ip_location(ip):
     return {'ip': ip}
 
 def load_all_users():
-    return { doc.id: doc.to_dict() for doc in db.collection('users').stream() }
+    users = {}
+    for doc in db.collection('users').stream():
+        data = doc.to_dict()
+        # 필드가 없을 경우 기본값 추가
+        if 'pending_device_tokens' not in data:
+            data['pending_device_tokens'] = []
+        if 'device_tokens' not in data:
+            data['device_tokens'] = []
+        users[doc.id] = data
+    return users
+
 
 def load_pending():
     return { doc.id: doc.to_dict() for doc in db.collection('pending_codes').stream() }
@@ -397,10 +408,9 @@ def register_device():
     if not all([email, password, device_token]):
         return jsonify({'status': 'fail', 'message': '이메일, 비밀번호, 기기 토큰 모두 필요합니다.'}), 400
 
-    # 사용자 존재 확인 및 비밀번호 검증 (여기선 간략화, 실제론 Firebase에서 확인)
+    # 사용자 존재 확인
     try:
         user_record = firebase_auth.get_user_by_email(email)
-        # TODO: 비밀번호 확인은 Firebase에서 별도 처리 (여기선 생략)
     except firebase_auth.UserNotFoundError:
         return jsonify({'status': 'fail', 'message': '등록되지 않은 이메일입니다.'}), 404
 
@@ -411,27 +421,19 @@ def register_device():
     if device_token in user_info.get('device_tokens', []):
         return jsonify({'status': 'already_registered', 'message': '이미 등록된 기기입니다.'})
 
-    # 등록 요청 처리: 승인 대기 상태로 등록 신청 기록 남기기
-    # (기존 users 딕셔너리에 따로 저장하거나 별도 구조로 관리 가능)
     if 'pending_device_tokens' not in user_info:
         user_info['pending_device_tokens'] = []
     if device_token in user_info['pending_device_tokens']:
         return jsonify({'status': 'fail', 'message': '이미 등록 요청 중인 기기입니다.'})
 
+    # 🔥 여기가 핵심: Firestore에 업데이트
     user_info['pending_device_tokens'].append(device_token)
+    save_user(email, user_info)
 
-    # 관리자에게 승인 요청 메일 보내기 (기존 send_admin_approval_email 재활용 가능)
-    subject = "새로운 기기 등록 승인 요청"
-    body = (
-        f"새로운 기기 등록 요청이 있습니다.\n\n"
-        f"이메일: {email}\n"
-        f"기기 토큰: {device_token}\n\n"
-        f"관리자 페이지에서 승인을 진행해주세요."
-    )
-    # 메일 발송 함수 재활용
-    send_admin_approval_email(email, device_token)
+    send_admin_approval_email(email, device_token, is_new_user=False)
 
     return jsonify({'status': 'pending', 'message': '기기 등록 신청 완료. 관리자의 승인을 기다려 주세요.'})
+
 
 
 if __name__ == '__main__':

@@ -150,32 +150,37 @@
 </table>
 
   <h2>추가 기기 등록 요청</h2>
-  <table>
-    <thead>
-      <tr>
-        <th>이메일</th>
-        <th>기기 토큰</th>
-        <th>작업</th>
-      </tr>
-    </thead>
-    <tbody id="pending-devices-tbody">
-      {% if pending_devices %}
-        {% for email, tokens in pending_devices.items() %}
+<table>
+  <thead>
+    <tr>
+      <th>이메일</th>
+      <th>기기 토큰</th>
+      <th>작업</th>
+    </tr>
+  </thead>
+  <tbody id="pending-devices-tbody">
+    {% if pending_devices %}
+      {% set has_requests = false %}
+      {% for email, tokens in pending_devices.items() %}
+        {% if tokens %}
           {% for token in tokens %}
-          <tr data-email="{{ email }}" data-token="{{ token }}">
-            <td>{{ email }}</td>
-            <td>{{ token }}</td>
-            <td>
-              <button onclick="approveDevice(this)">기기 승인</button>
-              <button onclick="rejectDevice(this)">기기 거부</button>
-            </td>
-          </tr>
+            <tr data-email="{{ email }}" data-token="{{ token }}">
+              <td>{{ email }}</td>
+              <td>{{ token }}</td>
+              <td>
+                <button onclick="approveDevice(this)">기기 승인</button>
+                <button onclick="rejectDevice(this)">기기 거부</button>
+              </td>
+            </tr>
+            {% set has_requests = true %}
           {% endfor %}
-        {% endfor %}
-      {% else %}
+        {% endif %}
+      {% endfor %}
+      {% if not has_requests %}
         <tr><td colspan="3" style="text-align:center;">기기 등록 요청이 없습니다.</td></tr>
       {% endif %}
-    </tbody>
-  </table>
-</body>
-</html>
+    {% else %}
+      <tr><td colspan="3" style="text-align:center;">기기 등록 요청이 없습니다.</td></tr>
+    {% endif %}
+  </tbody>
+</table>
