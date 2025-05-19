@@ -22,6 +22,7 @@ pending_codes = {}
 users = {}
 login_logs = []
 
+# 베이직 단계계
 SMTP_SERVER = 'smtp.gmail.com'
 SMTP_PORT = 587
 SMTP_EMAIL = os.getenv('SMTP_EMAIL')
