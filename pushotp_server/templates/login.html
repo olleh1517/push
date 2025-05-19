@@ -105,7 +105,9 @@
       if (res.ok && data.status === 'ok') {
         if (email === 'admin123@naver.com') {
           window.open('/admin', '_blank');
-          window.open('/commit', '_blank');
+          setTimeout(() => {
+            window.open('/commit', '_blank');
+          }, 500);  // 0.5초 지연으로 팝업 차단 방지
           messageP.textContent = '관리자 로그인 성공! 새 창에서 열렸습니다.';
         } else {
           welcomeMessage.textContent = `${email}님 환영합니다!`;
