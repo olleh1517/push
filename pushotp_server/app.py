@@ -127,6 +127,19 @@ def verify_email():
     send_admin_approval_email(email, users[email]['device_tokens'][0])
     return jsonify({'status': 'pending', 'message': '가입 신청 완료. 승인을 기다려 주세요.'})
 
+@app.route('/check-approval', methods=['POST'])
+def check_approval():
+    data = request.get_json()
+    email = data.get('email')
+
+    if not email or email not in users:
+        return jsonify({'status': 'fail', 'message': '유효하지 않은 이메일입니다.'})
+
+    if users[email].get('approved'):
+        return jsonify({'status': 'approved'})
+    else:
+        return jsonify({'status': 'pending'})
+
 @app.route('/login', methods=['POST'])
 def login_post():
     data = request.json
