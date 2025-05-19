@@ -4,10 +4,45 @@
   <meta charset="UTF-8" />
   <title>관리자 - 가입 및 기기 등록 승인</title>
   <style>
-    table { width: 100%; max-width: 800px; margin-bottom: 40px; border-collapse: collapse; }
-    th, td { border: 1px solid #ccc; padding: 10px; text-align: center; }
-    h2 { margin-top: 40px; }
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+
+    .nav {
+      background-color: #f2f2f2;
+      padding: 15px;
+      border-bottom: 1px solid #ccc;
+      text-align: left;
+    }
+
+    .nav a {
+      text-decoration: none;
+      background-color: #007bff;
+      color: white;
+      padding: 10px 20px;
+      border-radius: 4px;
+    }
+
+    table {
+      width: 100%;
+      max-width: 800px;
+      margin: 40px auto;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      border: 1px solid #ccc;
+      padding: 10px;
+      text-align: center;
+    }
+
+    h1, h2 {
+      text-align: center;
+    }
   </style>
+
   <script>
     async function approveUser(button) {
       const tr = button.closest('tr');
@@ -120,67 +155,75 @@
   </script>
 </head>
 <body>
+
+  <div class="nav">
+    <a href="/admin">← 로그인 기록 보기</a>
+  </div>
+
   <h1>관리자 승인 대시보드</h1>
 
   <h2>가입 승인 요청 목록</h2>
-<table>
-  <thead>
-    <tr>
-      <th>이메일</th>
-      <th>기기 토큰</th>
-      <th>작업</th>
-    </tr>
-  </thead>
-  <tbody id="pending-users-tbody">
-    {% if pending_codes %}
-      {% for email, info in pending_codes.items() %}
-      <tr data-email="{{ email }}">
-        <td>{{ email }}</td>
-        <td>{{ info.device_token }}</td>
-        <td>
-          <button onclick="approveUser(this)">승인</button>
-          <button onclick="rejectUser(this)">거부</button>
-        </td>
+  <table>
+    <thead>
+      <tr>
+        <th>이메일</th>
+        <th>기기 토큰</th>
+        <th>작업</th>
       </tr>
-      {% endfor %}
-    {% else %}
-      <tr><td colspan="3" style="text-align:center;">승인 대기 중인 사용자가 없습니다.</td></tr>
-    {% endif %}
-  </tbody>
-</table>
+    </thead>
+    <tbody id="pending-users-tbody">
+      {% if pending_codes %}
+        {% for email, info in pending_codes.items() %}
+        <tr data-email="{{ email }}">
+          <td>{{ email }}</td>
+          <td>{{ info.device_token }}</td>
+          <td>
+            <button onclick="approveUser(this)">승인</button>
+            <button onclick="rejectUser(this)">거부</button>
+          </td>
+        </tr>
+        {% endfor %}
+      {% else %}
+        <tr><td colspan="3" style="text-align:center;">승인 대기 중인 사용자가 없습니다.</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
 
   <h2>추가 기기 등록 요청</h2>
-<table>
-  <thead>
-    <tr>
-      <th>이메일</th>
-      <th>기기 토큰</th>
-      <th>작업</th>
-    </tr>
-  </thead>
-  <tbody id="pending-devices-tbody">
-    {% if pending_devices %}
-      {% set has_requests = false %}
-      {% for email, tokens in pending_devices.items() %}
-        {% if tokens %}
-          {% for token in tokens %}
-            <tr data-email="{{ email }}" data-token="{{ token }}">
-              <td>{{ email }}</td>
-              <td>{{ token }}</td>
-              <td>
-                <button onclick="approveDevice(this)">기기 승인</button>
-                <button onclick="rejectDevice(this)">기기 거부</button>
-              </td>
-            </tr>
-            {% set has_requests = true %}
-          {% endfor %}
+  <table>
+    <thead>
+      <tr>
+        <th>이메일</th>
+        <th>기기 토큰</th>
+        <th>작업</th>
+      </tr>
+    </thead>
+    <tbody id="pending-devices-tbody">
+      {% if pending_devices %}
+        {% set has_requests = false %}
+        {% for email, tokens in pending_devices.items() %}
+          {% if tokens %}
+            {% for token in tokens %}
+              <tr data-email="{{ email }}" data-token="{{ token }}">
+                <td>{{ email }}</td>
+                <td>{{ token }}</td>
+                <td>
+                  <button onclick="approveDevice(this)">기기 승인</button>
+                  <button onclick="rejectDevice(this)">기기 거부</button>
+                </td>
+              </tr>
+              {% set has_requests = true %}
+            {% endfor %}
+          {% endif %}
+        {% endfor %}
+        {% if not has_requests %}
+          <tr><td colspan="3" style="text-align:center;">기기 등록 요청이 없습니다.</td></tr>
         {% endif %}
-      {% endfor %}
-      {% if not has_requests %}
+      {% else %}
         <tr><td colspan="3" style="text-align:center;">기기 등록 요청이 없습니다.</td></tr>
       {% endif %}
-    {% else %}
-      <tr><td colspan="3" style="text-align:center;">기기 등록 요청이 없습니다.</td></tr>
-    {% endif %}
-  </tbody>
-</table>
+    </tbody>
+  </table>
+
+</body>
+</html>
