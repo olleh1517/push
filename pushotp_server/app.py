@@ -101,8 +101,10 @@ def get_ip_location(ip):
     return {'ip': ip}
 
 def load_all_users():
-    docs = db.collection('users').stream()
-    return {doc.id: doc.to_dict() for doc in docs}
+    return { doc.id: doc.to_dict() for doc in db.collection('users').stream() }
+
+def load_pending():
+    return { doc.id: doc.to_dict() for doc in db.collection('pending_codes').stream() }
 
 
 @app.route('/')
@@ -168,14 +170,12 @@ def verify_email():
         return jsonify({'status': 'fail', 'message': '인증코드가 틀립니다.'}), 400
 
     hashed_pw = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-    user_data = {
-        "device_tokens": [pending['device_token']],
-        "approved": False,
-        "password": hashed_pw
-    }
-
-    save_user(email, user_data)
-    db.collection('pending_codes').document(email).delete()
+    db.collection('pending_codes').document(email).set({
+         'code': pending['code'],
+         'device_token': pending['device_token'],
+         'hashed_pw': hashed_pw,
+         'created_at': pending['created_at']
+     })
     send_admin_approval_email(email, pending['device_token'])
 
     return jsonify({'status': 'pending', 'message': '가입 신청 완료. 승인을 기다려 주세요.'})
@@ -252,17 +252,18 @@ def approve_user():
         return jsonify({'status': 'fail', 'message': '이미 승인된 사용자입니다.'}), 400
 
     try:
-        firebase_auth.create_user(
-            email=email,
-            password=user['password']
-        )
+       firebase_auth.create_user(email=email, password=user['hashed_pw'])
     except firebase_auth.EmailAlreadyExistsError:
-        return jsonify({'status': 'fail', 'message': '이미 Firebase에 존재하는 이메일입니다.'}), 400
-    except Exception as e:
-        return jsonify({'status': 'fail', 'message': f'Firebase 등록 실패: {str(e)}'}), 500
+        pass
 
-    user['approved'] = True
-    save_user(email, user)
+   # 2) Firestore users 컬렉션에 최종 등록
+    final = {
+        'password': user['hashed_pw'],
+        'device_tokens': [ user['device_token'] ],
+        'approved': True
+    }
+    save_user(email, final)
+    db.collection('pending_codes').document(email).delete()
     return jsonify({'status': 'ok', 'message': '승인 및 등록 완료'})
 
 
