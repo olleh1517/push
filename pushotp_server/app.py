@@ -32,6 +32,9 @@ SMTP_EMAIL = os.getenv('SMTP_EMAIL')
 SMTP_PASSWORD = os.getenv('SMTP_PASSWORD')
 ADMIN_EMAIL = os.getenv('ADMIN_EMAIL')
 
+pending_codes = {}  # 인증 코드 임시 저장소
+login_logs = []     # 로그인 기록 저장소
+
 
 # Firestore 유틸
 def save_user(email, data):
@@ -133,6 +136,8 @@ def signup_post():
         'device_token': device_token,
         'created_at': firestore.SERVER_TIMESTAMP
     })
+
+    print(email, code)
 
     if not send_verification_email(email, code):
         return jsonify({'error': '이메일 발송에 실패했습니다.'}), 500
