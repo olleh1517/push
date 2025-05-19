@@ -205,6 +205,7 @@ def login_post():
     password = data.get('password')  # 추가
     device_token = data.get('device_token')
     ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+    print("최신본 수정사항이 적용됐는지 체크크")
 
     user = get_user(email)
     log = {'email': email, 'timestamp': datetime.datetime.utcnow().isoformat() + 'Z'}
