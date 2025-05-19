@@ -169,13 +169,17 @@ def verify_email():
     if pending['code'] != code:
         return jsonify({'status': 'fail', 'message': '인증코드가 틀립니다.'}), 400
 
+    # 🔐 해시 비밀번호와 평문 비밀번호 둘 다 저장 (주의: 실제 서비스에선 평문 저장 ❌)
     hashed_pw = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
     db.collection('pending_codes').document(email).set({
          'code': pending['code'],
          'device_token': pending['device_token'],
          'hashed_pw': hashed_pw,
+         'plain_pw': password,  # 🟡 Firebase 사용자 등록용으로만 사용
          'created_at': pending['created_at']
-     })
+    })
+
     send_admin_approval_email(email, pending['device_token'])
 
     return jsonify({'status': 'pending', 'message': '가입 신청 완료. 승인을 기다려 주세요.'})
@@ -262,15 +266,20 @@ def approve_user():
 
     info = doc.to_dict()
 
+    # ⚠️ Firebase Auth는 평문 비밀번호만 허용
     try:
-        firebase_auth.create_user(email=email, password=info['hashed_pw'])
+        firebase_auth.create_user(
+            email=email,
+            password=info['plain_pw']
+        )
     except firebase_auth.EmailAlreadyExistsError:
         pass
     except Exception as e:
         return jsonify({'status': 'fail', 'message': f'Firebase 등록 실패: {str(e)}'}), 500
 
+    # ✅ Firestore에 최종 사용자 저장 (hashed_pw는 로컬 검증용)
     save_user(email, {
-        'password': info['hashed_pw'],
+        'password': info['hashed_pw'],  # 로그인 시 bcrypt 검증용
         'device_tokens': [info['device_token']],
         'approved': True
     })
