@@ -143,7 +143,7 @@ def increment_fail_in_firestore(email, reason):
         send_email(
             email,
             "보안 경고: 반복된 로그인 실패",
-            f"{email} 계정에서 로그인 실패가 3회 발생했습니다.\n사유: {reason}"
+            f"{email} 계정에서 로그인 실패가 3회 발생했습니다.\n사유: {reason}\n보안을 위해 계정을 5분 간 잠금했습니다."
         )
 
 
