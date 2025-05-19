@@ -105,15 +105,35 @@
       const deviceToken = getOrCreateDeviceToken();
 
       if (email === 'admin123@naver.com' && password === 'admin123') {
-        messageP.style.color = 'green';
-        messageP.textContent = '관리자 계정으로 로그인합니다.';
+        try {
+        // Firebase 로그인 시도
+        const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
 
-        // 1초 후 /admin 페이지로 이동
-        setTimeout(() => {
-          window.location.href = '/admin';
-        }, 1000);
-        return;
-      }
+        // 서버에도 로그인 요청 (서버에서 기기 토큰 체크 등)
+        const res = await fetch('/login', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            email: email,
+            assword: password, // admin도 서버 bcrypt 검사 받도록!
+            device_token: deviceToken
+          })
+    });
+
+    const data = await res.json();
+    if (res.ok && data.status === 'ok') {
+      window.open('/admin', '_blank');  // 🟢 새 탭으로 관리자 페이지 열기
+      messageP.textContent = '관리자 로그인 성공! 새 창에서 열렸습니다.';
+    } else {
+      messageP.textContent = data.message || '관리자 로그인 실패';
+      await firebase.auth().signOut(); // 실패시 로그아웃
+    }
+  } catch (err) {
+    messageP.textContent = '관리자 로그인 실패: ' + err.message;
+  }
+
+  return;
+    }
 
       try {
         const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);

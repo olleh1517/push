@@ -202,13 +202,27 @@ def check_approval():
 def login_post():
     data = request.json
     email = data.get('email')
-    password = data.get('password')  # 추가
-    device_token = data.get('device_token')
+    status = data.get('status')
+    reason = data.get('reason')
     ip = request.headers.get('X-Forwarded-For', request.remote_addr)
-    print("최신본 수정사항이 적용됐는지 체크크")
 
+    log = {
+        'email': email,
+        'timestamp': datetime.datetime.utcnow().isoformat() + 'Z',
+        'status': status or 'unknown',
+        'reason': reason or 'unknown',
+        'ip': ip
+    }
+
+    # 클라이언트에서 실패 정보만 전송한 경우
+    if status == 'fail':
+        login_logs.append(log)
+        return jsonify({'status': 'logged', 'message': '실패 기록 저장됨'}), 200
+
+    # 이후는 실제 로그인 검증 루틴
+    password = data.get('password')
+    device_token = data.get('device_token')
     user = get_user(email)
-    log = {'email': email, 'timestamp': datetime.datetime.utcnow().isoformat() + 'Z'}
 
     if not user:
         log['status'] = 'fail'
