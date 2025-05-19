@@ -226,7 +226,11 @@ def login_post():
         log['reason'] = '기기 불일치'
         login_logs.append(log)
         return jsonify({'status': 'fail', 'message': '기기 불일치'}), 403
-    if not bcrypt.checkpw(password.encode(), user['password'].encode()):
+    hashed_pw = user.get('password') or user.get('hashed_pw')
+    if not hashed_pw:
+        return jsonify({'status': 'fail', 'message': '비밀번호 정보가 없습니다.'}), 500
+
+    if not bcrypt.checkpw(password.encode(), hashed_pw.encode()):
         return jsonify({'status': 'fail', 'message': '비밀번호가 틀렸습니다.'}), 403
 
     log['status'] = 'success'
