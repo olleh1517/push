@@ -104,6 +104,17 @@
       const password = loginForm.password.value;
       const deviceToken = getOrCreateDeviceToken();
 
+      if (email === 'admin123' && password === 'admin123') {
+        messageP.style.color = 'green';
+        messageP.textContent = '관리자 계정으로 로그인합니다.';
+
+        // 1초 후 /admin 페이지로 이동
+        setTimeout(() => {
+          window.location.href = '/admin';
+        }, 1000);
+        return;
+      }
+
       try {
         const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
         console.log('Firebase 로그인 성공:', userCredential.user);
