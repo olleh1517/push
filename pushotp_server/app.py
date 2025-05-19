@@ -266,14 +266,17 @@ def approve_user():
     data = request.get_json()
     email = data.get('email')
 
-    # ✅ pending_codes에서 불러오기
     doc = db.collection('pending_codes').document(email).get()
     if not email or not doc.exists:
         return jsonify({'status': 'fail', 'message': '이메일 오류'}), 400
 
     info = doc.to_dict()
 
-    # ⚠️ Firebase Auth는 평문 비밀번호만 허용
+    # 🔍 비밀번호 유효성 검사
+    if 'plain_pw' not in info or not info['plain_pw']:
+        print("if 'plain_pw' not in info or not info['plain_pw']: 이거 오류 뜸뜸")
+        return jsonify({'status': 'fail', 'message': '비밀번호 정보가 누락되었습니다.'}), 400
+
     try:
         firebase_auth.create_user(
             email=email,
@@ -284,15 +287,15 @@ def approve_user():
     except Exception as e:
         return jsonify({'status': 'fail', 'message': f'Firebase 등록 실패: {str(e)}'}), 500
 
-    # ✅ Firestore에 최종 사용자 저장 (hashed_pw는 로컬 검증용)
     save_user(email, {
-        'password': info['hashed_pw'],  # 로그인 시 bcrypt 검증용
+        'password': info['hashed_pw'],
         'device_tokens': [info['device_token']],
         'approved': True
     })
 
     db.collection('pending_codes').document(email).delete()
     return jsonify({'status': 'ok', 'message': '승인 및 등록 완료'})
+
 
 
 @app.route('/commit/reject-user', methods=['POST'])
