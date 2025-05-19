@@ -17,9 +17,13 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'default_secret_key')
 
 # Firebase Admin SDK 초기화
 firebase_credentials_path = "/etc/secrets/firebase_credentials.json"
+# Firebase Admin SDK 초기화
+firebase_credentials_path = "/etc/secrets/firebase_credentials.json"
 if not firebase_admin._apps:
     cred = credentials.Certificate(firebase_credentials_path)
-    firebase_admin.initialize_app(cred)
+    firebase_admin.initialize_app(cred, {
+        'projectId': 'pushotp-49168'  # ← 명시적으로 프로젝트 ID 추가
+    })
 
 # 🔄 Firestore 클라이언트는 Firebase 초기화 이후에 호출해야 함
 from firebase_admin import firestore
