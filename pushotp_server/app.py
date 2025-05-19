@@ -9,7 +9,7 @@ from flask import Flask, request, jsonify, render_template, redirect
 import firebase_admin
 from firebase_admin import credentials, auth as firebase_auth, firestore
 from dotenv import load_dotenv
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 
 load_dotenv()
 
@@ -121,26 +121,31 @@ def load_pending():
     return { doc.id: doc.to_dict() for doc in db.collection('pending_codes').stream() }
 
 # Firestore에 실패 횟수 증가
+from datetime import datetime, timezone
+
+# 실패 기록 추가 함수
 def increment_fail_in_firestore(email, reason):
+    from datetime import datetime, timezone
+
     doc_ref = db.collection('failed_attempts').document(email)
     doc = doc_ref.get()
-    current_count = doc.to_dict()['count'] if doc.exists and 'count' in doc.to_dict() else 0
+    doc_dict = doc.to_dict() if doc.exists else {}
+    current_count = doc_dict.get('count', 0)
     updated_count = current_count + 1
 
     doc_ref.set({
         'count': updated_count,
         'last_reason': reason,
-        'last_failed_at': datetime.utcnow()
-    })
+        'last_failed_at': datetime.now(timezone.utc)
+    }, merge=True)
 
     if updated_count >= 3:
         send_email(
             email,
             "보안 경고: 반복된 로그인 실패",
-            f"{email} 계정에서 로그인 실패가 3회 발생했습니다.\n사유: {reason}\n잠재적인 보안 위협이 감지되었습니다."
+            f"{email} 계정에서 로그인 실패가 3회 발생했습니다.\n사유: {reason}"
         )
-        # 실패 횟수 초기화
-        doc_ref.set({'count': 0}, merge=True)
+
 
 def is_login_blocked(email):
     doc = db.collection('failed_attempts').document(email).get()
@@ -259,7 +264,7 @@ def login_post():
 
     log = {
         'email': email,
-        'timestamp': datetime.utcnow().isoformat() + 'Z',
+        'timestamp': datetime.now(timezone.utc).isoformat(),
         'ip': ip,
         'status': status or 'unknown',
         'reason': reason or 'unknown'
