@@ -130,7 +130,7 @@ def increment_fail_in_firestore(email, reason):
     doc_ref.set({
         'count': updated_count,
         'last_reason': reason,
-        'last_failed_at': datetime.datetime.utcnow()
+        'last_failed_at': datetime.utcnow()
     })
 
     if updated_count >= 3:
