@@ -43,7 +43,9 @@ def save_user(email, data):
 def get_user(email):
     doc = db.collection('users').document(email).get()
     if doc.exists:
-        return doc.to_dict()
+        user = doc.to_dict()
+        print("[Firestore 유저 로드]", user)  # 🔍 여기에 로그 추가
+        return user
     return None
 
 
