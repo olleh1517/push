@@ -123,31 +123,31 @@
   <h1>관리자 승인 대시보드</h1>
 
   <h2>가입 승인 요청 목록</h2>
-  <table>
-    <thead>
-      <tr>
-        <th>이메일</th>
-        <th>기기 토큰</th>
-        <th>작업</th>
+<table>
+  <thead>
+    <tr>
+      <th>이메일</th>
+      <th>기기 토큰</th>
+      <th>작업</th>
+    </tr>
+  </thead>
+  <tbody id="pending-users-tbody">
+    {% if pending_codes %}
+      {% for email, info in pending_codes.items() %}
+      <tr data-email="{{ email }}">
+        <td>{{ email }}</td>
+        <td>{{ info.device_token }}</td>
+        <td>
+          <button onclick="approveUser(this)">승인</button>
+          <button onclick="rejectUser(this)">거부</button>
+        </td>
       </tr>
-    </thead>
-    <tbody id="pending-users-tbody">
-      {% if pending_users %}
-        {% for email, info in pending_users.items() %}
-        <tr data-email="{{ email }}">
-          <td>{{ email }}</td>
-          <td>{{ info.device_tokens[0] }}</td>
-          <td>
-            <button onclick="approveUser(this)">승인</button>
-            <button onclick="rejectUser(this)">거부</button>
-          </td>
-        </tr>
-        {% endfor %}
-      {% else %}
-        <tr><td colspan="3" style="text-align:center;">승인 대기 중인 사용자가 없습니다.</td></tr>
-      {% endif %}
-    </tbody>
-  </table>
+      {% endfor %}
+    {% else %}
+      <tr><td colspan="3" style="text-align:center;">승인 대기 중인 사용자가 없습니다.</td></tr>
+    {% endif %}
+  </tbody>
+</table>
 
   <h2>추가 기기 등록 요청</h2>
   <table>

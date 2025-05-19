@@ -231,13 +231,22 @@ def login_post():
 def commit_page():
     all_users = load_all_users()
     pending_users = {email: info for email, info in all_users.items() if not info.get('approved')}
+
+    # ✅ 여기 추가: pending_codes 컬렉션 불러오기
+    pending_codes = load_pending()
+
     pending_devices = {
         email: info['pending_device_tokens']
         for email, info in all_users.items()
         if info.get('approved') and info.get('pending_device_tokens')
     }
 
-    return render_template('commit.html', pending_users=pending_users, pending_devices=pending_devices)
+    return render_template(
+        'commit.html',
+        pending_users=pending_users,
+        pending_devices=pending_devices,
+        pending_codes=pending_codes  # 템플릿에서 이 값으로 표시
+    )
 
 
 
