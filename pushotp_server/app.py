@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 from firebase_admin import firestore
 db = firestore.client()
-
+# 테스트트
 # Firestore에 사용자 저장
 def save_user(email, data):
     db.collection('users').document(email).set(data)
