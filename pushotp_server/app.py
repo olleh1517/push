@@ -10,9 +10,20 @@ import firebase_admin
 from firebase_admin import credentials, auth as firebase_auth
 from dotenv import load_dotenv
 
+load_dotenv()
+
+app = Flask(__name__)
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'default_secret_key')
+
+# Firebase Admin SDK 초기화
+firebase_credentials_path = "/etc/secrets/firebase_credentials.json"
+cred = credentials.Certificate(firebase_credentials_path)
+firebase_admin.initialize_app(cred)
+
+# 🔄 Firestore 클라이언트는 Firebase 초기화 이후에 호출해야 함
 from firebase_admin import firestore
 db = firestore.client()
-# 테스트트
+
 # Firestore에 사용자 저장
 def save_user(email, data):
     db.collection('users').document(email).set(data)
@@ -24,29 +35,22 @@ def get_user(email):
         return doc.to_dict()
     return None
 
-# Firestore에서 전체 사용자 불러오기 (앱 시작 시 등)
+# Firestore에서 전체 사용자 불러오기
 def load_all_users():
     docs = db.collection('users').stream()
     return {doc.id: doc.to_dict() for doc in docs}
 
-load_dotenv()
-
-app = Flask(__name__)
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'default_secret_key')
-
-firebase_credentials_path = "/etc/secrets/firebase_credentials.json"
-cred = credentials.Certificate(firebase_credentials_path)
-firebase_admin.initialize_app(cred)
-
-pending_codes = {}
-login_logs = []
-
-# 베이직 단계
+# 이메일 발송 설정
 SMTP_SERVER = 'smtp.gmail.com'
 SMTP_PORT = 587
 SMTP_EMAIL = os.getenv('SMTP_EMAIL')
 SMTP_PASSWORD = os.getenv('SMTP_PASSWORD')
 ADMIN_EMAIL = os.getenv('ADMIN_EMAIL')
+
+# 상태 저장
+pending_codes = {}
+login_logs = []
+
 
 def get_ip_location(ip):
     try:
