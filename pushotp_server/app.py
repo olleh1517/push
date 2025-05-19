@@ -7,7 +7,7 @@ import bcrypt
 from email.mime.text import MIMEText
 from flask import Flask, request, jsonify, render_template, redirect
 import firebase_admin
-from firebase_admin import credentials, auth as firebase_auth
+from firebase_admin import credentials, auth as firebase_auth, firestore
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -17,45 +17,68 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'default_secret_key')
 
 # Firebase Admin SDK 초기화
 firebase_credentials_path = "/etc/secrets/firebase_credentials.json"
-# Firebase Admin SDK 초기화
-firebase_credentials_path = "/etc/secrets/firebase_credentials.json"
 if not firebase_admin._apps:
     cred = credentials.Certificate(firebase_credentials_path)
     firebase_admin.initialize_app(cred, {
-        'projectId': 'pushotp-49168'  # ← 명시적으로 프로젝트 ID 추가
+        'projectId': 'pushotp-49168'
     })
 
-# 🔄 Firestore 클라이언트는 Firebase 초기화 이후에 호출해야 함
-from firebase_admin import firestore
 db = firestore.client()
 
-# Firestore에 사용자 저장
-def save_user(email, data):
-    db.collection('users').document(email).set(data)
-
-# Firestore에서 사용자 불러오기
-def get_user(email):
-    doc = db.collection('users').document(email).get()
-    if doc.exists:
-        return doc.to_dict()
-    return None
-
-# Firestore에서 전체 사용자 불러오기
-def load_all_users():
-    docs = db.collection('users').stream()
-    return {doc.id: doc.to_dict() for doc in docs}
-
-# 이메일 발송 설정
+# SMTP 설정
 SMTP_SERVER = 'smtp.gmail.com'
 SMTP_PORT = 587
 SMTP_EMAIL = os.getenv('SMTP_EMAIL')
 SMTP_PASSWORD = os.getenv('SMTP_PASSWORD')
 ADMIN_EMAIL = os.getenv('ADMIN_EMAIL')
 
-# 상태 저장
-pending_codes = {}
-login_logs = []
 
+# Firestore 유틸
+def save_user(email, data):
+    db.collection('users').document(email).set(data)
+
+def get_user(email):
+    doc = db.collection('users').document(email).get()
+    if doc.exists:
+        return doc.to_dict()
+    return None
+
+
+# 이메일 유틸
+def send_email(to, subject, body):
+    msg = MIMEText(body)
+    msg['Subject'] = subject
+    msg['From'] = SMTP_EMAIL
+    msg['To'] = to
+    try:
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+            server.starttls()
+            server.login(SMTP_EMAIL, SMTP_PASSWORD)
+            server.sendmail(SMTP_EMAIL, to, msg.as_string())
+        return True
+    except Exception as e:
+        print(f"[메일발송 실패] {e}")
+        return False
+
+def send_verification_email(email, code):
+    subject = "회원가입 인증 코드"
+    body = f"인증 코드: {code}"
+    return send_email(email, subject, body)
+
+def send_admin_approval_email(email, device_token, is_new_user=True):
+    subject = "회원가입 승인 요청" if is_new_user else "기기 등록 승인 요청"
+    body = f"이메일: {email}\n기기 토큰: {device_token}\n\n관리자 페이지에서 승인을 진행해주세요."
+    send_email(ADMIN_EMAIL, subject, body)
+
+def send_security_alert(email, location_info):
+    subject = "보안 경고: 허가되지 않은 기기에서 로그인 시도"
+    body = f"""
+이메일: {email}
+IP: {location_info['ip']}
+위치: {location_info.get('city')}, {location_info.get('region')}, {location_info.get('country')}
+시간: {datetime.datetime.utcnow().isoformat()} UTC
+"""
+    send_email(email, subject, body)
 
 def get_ip_location(ip):
     try:
@@ -74,42 +97,6 @@ def get_ip_location(ip):
         print(f"IP 위치 조회 실패: {e}")
     return {'ip': ip}
 
-def send_email(to, subject, body):
-    msg = MIMEText(body)
-    msg['Subject'] = subject
-    msg['From'] = SMTP_EMAIL
-    msg['To'] = to
-    try:
-        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-            server.starttls()
-            server.login(SMTP_EMAIL, SMTP_PASSWORD)
-            server.sendmail(SMTP_EMAIL, to, msg.as_string())
-    except Exception as e:
-        print(f"[메일발송 실패] {e}")
-
-def send_verification_email(email, code):
-    subject = "회원가입 인증 코드"
-    body = f"인증 코드: {code}"
-    send_email(email, subject, body)
-
-def send_admin_approval_email(email, device_token, is_new_user=True):
-    if is_new_user:
-        subject = "회원가입 승인 요청"
-        body = f"이메일: {email}\n기기 토큰: {device_token}\n\n관리자 페이지에서 승인을 진행해주세요."
-    else:
-        subject = "새로운 기기 등록 승인 요청"
-        body = f"기기 등록 요청이 있습니다.\n이메일: {email}\n기기 토큰: {device_token}\n관리자 페이지에서 확인하세요."
-    send_email(ADMIN_EMAIL, subject, body)
-
-def send_security_alert(email, location_info):
-    subject = "보안 경고: 허가되지 않은 기기에서 로그인 시도"
-    body = f"""
-이메일: {email}
-IP: {location_info['ip']}
-위치: {location_info.get('city')}, {location_info.get('region')}, {location_info.get('country')}
-시간: {datetime.datetime.utcnow().isoformat()} UTC
-"""
-    send_email(email, subject, body)
 
 @app.route('/')
 def index():
@@ -119,6 +106,7 @@ def index():
 def signup_page():
     return render_template('signup.html')
 
+
 @app.route('/signup', methods=['POST'])
 def signup_post():
     data = request.json
@@ -127,17 +115,26 @@ def signup_post():
 
     if not email or not device_token:
         return jsonify({'error': '이메일과 기기 토큰이 필요합니다.'}), 400
-    if get_user(email) or email in pending_codes:
-        return jsonify({'error': '이미 인증 중이거나 가입된 이메일입니다.'}), 400
+
+    if get_user(email):
+        return jsonify({'error': '이미 가입된 이메일입니다.'}), 400
+
+    doc_ref = db.collection('pending_codes').document(email)
+    if doc_ref.get().exists:
+        return jsonify({'error': '이미 인증 중인 이메일입니다.'}), 400
 
     code = str(random.randint(100000, 999999))
-    pending_codes[email] = {'code': code, 'device_token': device_token}
-    print(email, code)
-    send_verification_email(email, code)
+    doc_ref.set({
+        'code': code,
+        'device_token': device_token,
+        'created_at': firestore.SERVER_TIMESTAMP
+    })
+
+    if not send_verification_email(email, code):
+        return jsonify({'error': '이메일 발송에 실패했습니다.'}), 500
 
     return jsonify({'message': '인증코드를 이메일로 보냈습니다.'})
 
-import bcrypt  # 파일 맨 위에서 import 되어 있어야 함
 
 @app.route('/verify-email', methods=['POST'])
 def verify_email():
@@ -149,21 +146,29 @@ def verify_email():
     if not all([email, code, password]):
         return jsonify({'status': 'fail', 'message': '모든 항목이 필요합니다.'}), 400
 
-    pending = pending_codes.get(email)
-    if not pending or pending['code'] != code:
+    doc = db.collection('pending_codes').document(email).get()
+    if not doc.exists:
+        return jsonify({'status': 'fail', 'message': '인증 정보가 없습니다.'}), 400
+
+    pending = doc.to_dict()
+    created_at = pending.get('created_at')
+    if not created_at or (datetime.datetime.utcnow() - created_at.replace(tzinfo=None)).total_seconds() > 300:
+        return jsonify({'status': 'fail', 'message': '인증코드가 만료되었습니다.'}), 400
+
+    if pending['code'] != code:
         return jsonify({'status': 'fail', 'message': '인증코드가 틀립니다.'}), 400
 
-    # ✅ 비밀번호 해시 처리
     hashed_pw = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-
     user_data = {
         "device_tokens": [pending['device_token']],
         "approved": False,
         "password": hashed_pw
     }
+
     save_user(email, user_data)
-    del pending_codes[email]
-    send_admin_approval_email(email, user_data['device_tokens'][0])
+    db.collection('pending_codes').document(email).delete()
+    send_admin_approval_email(email, pending['device_token'])
+
     return jsonify({'status': 'pending', 'message': '가입 신청 완료. 승인을 기다려 주세요.'})
 
 
@@ -176,10 +181,7 @@ def check_approval():
     if not email or not user:
         return jsonify({'status': 'fail', 'message': '유효하지 않은 이메일입니다.'})
 
-    if user.get('approved'):
-        return jsonify({'status': 'approved'})
-    else:
-        return jsonify({'status': 'pending'})
+    return jsonify({'status': 'approved' if user.get('approved') else 'pending'})
 
 @app.route('/login', methods=['POST'])
 def login_post():
