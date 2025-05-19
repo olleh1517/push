@@ -259,7 +259,7 @@ def login_post():
 
     log = {
         'email': email,
-        'timestamp': datetime.datetime.utcnow().isoformat() + 'Z',
+        'timestamp': datetime.utcnow().isoformat() + 'Z',
         'ip': ip,
         'status': status or 'unknown',
         'reason': reason or 'unknown'
