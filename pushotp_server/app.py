@@ -254,24 +254,27 @@ def commit_page():
 def approve_user():
     data = request.get_json()
     email = data.get('email')
-    user = get_user(email)
-    if not email or not user:
+
+    # ✅ pending_codes에서 불러오기
+    doc = db.collection('pending_codes').document(email).get()
+    if not email or not doc.exists:
         return jsonify({'status': 'fail', 'message': '이메일 오류'}), 400
-    if user['approved']:
-        return jsonify({'status': 'fail', 'message': '이미 승인된 사용자입니다.'}), 400
+
+    info = doc.to_dict()
 
     try:
-       firebase_auth.create_user(email=email, password=user['hashed_pw'])
+        firebase_auth.create_user(email=email, password=info['hashed_pw'])
     except firebase_auth.EmailAlreadyExistsError:
         pass
+    except Exception as e:
+        return jsonify({'status': 'fail', 'message': f'Firebase 등록 실패: {str(e)}'}), 500
 
-   # 2) Firestore users 컬렉션에 최종 등록
-    final = {
-        'password': user['hashed_pw'],
-        'device_tokens': [ user['device_token'] ],
+    save_user(email, {
+        'password': info['hashed_pw'],
+        'device_tokens': [info['device_token']],
         'approved': True
-    }
-    save_user(email, final)
+    })
+
     db.collection('pending_codes').document(email).delete()
     return jsonify({'status': 'ok', 'message': '승인 및 등록 완료'})
 
