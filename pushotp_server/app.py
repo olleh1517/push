@@ -202,6 +202,8 @@ def check_approval():
 def login_post():
     data = request.json
     email = data.get('email')
+    password = data.get('password')
+    device_token = data.get('device_token')
     status = data.get('status')
     reason = data.get('reason')
     ip = request.headers.get('X-Forwarded-For', request.remote_addr)
@@ -209,48 +211,60 @@ def login_post():
     log = {
         'email': email,
         'timestamp': datetime.datetime.utcnow().isoformat() + 'Z',
+        'ip': ip,
         'status': status or 'unknown',
-        'reason': reason or 'unknown',
-        'ip': ip
+        'reason': reason or 'unknown'
     }
 
-    # 클라이언트에서 실패 정보만 전송한 경우
+    # ✅ 1. 클라이언트 측 실패 정보 수신 시 로그만 저장
     if status == 'fail':
         login_logs.append(log)
         return jsonify({'status': 'logged', 'message': '실패 기록 저장됨'}), 200
 
-    # 이후는 실제 로그인 검증 루틴
-    password = data.get('password')
-    device_token = data.get('device_token')
-    user = get_user(email)
+    # ✅ 2. 관리자 예외 처리
+    if email == 'admin123@naver.com' and password == 'admin123':
+        log['status'] = 'success'
+        log['reason'] = 'admin_login'
+        login_logs.append(log)
+        return jsonify({'status': 'ok', 'message': '관리자 로그인 성공'})
 
+    # ✅ 3. 일반 사용자 로그인 검증
+    user = get_user(email)
     if not user:
         log['status'] = 'fail'
         log['reason'] = '사용자 없음'
         login_logs.append(log)
         return jsonify({'status': 'fail', 'message': '사용자 없음'}), 403
-    if not user['approved']:
+
+    if not user.get('approved', False):
         log['status'] = 'fail'
         log['reason'] = '미승인 사용자'
         login_logs.append(log)
         return jsonify({'status': 'fail', 'message': '미승인 사용자'}), 403
-    if device_token not in user['device_tokens']:
+
+    if device_token not in user.get('device_tokens', []):
         location = get_ip_location(ip)
         send_security_alert(email, location)
         log['status'] = 'fail'
         log['reason'] = '기기 불일치'
         login_logs.append(log)
         return jsonify({'status': 'fail', 'message': '기기 불일치'}), 403
+
     hashed_pw = user.get('password') or user.get('hashed_pw')
     if not hashed_pw:
         return jsonify({'status': 'fail', 'message': '비밀번호 정보가 없습니다.'}), 500
 
     if not bcrypt.checkpw(password.encode(), hashed_pw.encode()):
+        log['status'] = 'fail'
+        log['reason'] = '비밀번호 틀림'
+        login_logs.append(log)
         return jsonify({'status': 'fail', 'message': '비밀번호가 틀렸습니다.'}), 403
 
     log['status'] = 'success'
+    log['reason'] = 'login_success'
     login_logs.append(log)
     return jsonify({'status': 'ok', 'message': '로그인 성공'})
+
 
 @app.route('/commit', methods=['GET', 'POST'])
 def commit_page():
