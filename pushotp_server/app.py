@@ -97,6 +97,10 @@ def get_ip_location(ip):
         print(f"IP 위치 조회 실패: {e}")
     return {'ip': ip}
 
+def load_all_users():
+    docs = db.collection('users').stream()
+    return {doc.id: doc.to_dict() for doc in docs}
+
 
 @app.route('/')
 def index():
