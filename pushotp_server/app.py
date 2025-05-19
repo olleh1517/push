@@ -119,6 +119,28 @@ def load_all_users():
 def load_pending():
     return { doc.id: doc.to_dict() for doc in db.collection('pending_codes').stream() }
 
+# Firestore에 실패 횟수 증가
+def increment_fail_in_firestore(email, reason):
+    doc_ref = db.collection('failed_attempts').document(email)
+    doc = doc_ref.get()
+    current_count = doc.to_dict()['count'] if doc.exists and 'count' in doc.to_dict() else 0
+    updated_count = current_count + 1
+
+    doc_ref.set({
+        'count': updated_count,
+        'last_reason': reason,
+        'last_failed_at': datetime.datetime.utcnow()
+    })
+
+    if updated_count >= 3:
+        send_email(
+            email,
+            "보안 경고: 반복된 로그인 실패",
+            f"{email} 계정에서 로그인 실패가 3회 발생했습니다.\n사유: {reason}\n잠재적인 보안 위협이 감지되었습니다."
+        )
+        # 실패 횟수 초기화
+        doc_ref.set({'count': 0}, merge=True)
+
 
 @app.route('/')
 def index():
@@ -259,6 +281,7 @@ def login_post():
         log['status'] = 'fail'
         log['reason'] = '기기 불일치'
         login_logs.append(log)
+        increment_fail_in_firestore(email, '기기 불일치')
         return jsonify({'status': 'fail', 'message': '기기 불일치'}), 403
 
     hashed_pw = user.get('password') or user.get('hashed_pw')
@@ -269,6 +292,7 @@ def login_post():
         log['status'] = 'fail'
         log['reason'] = '비밀번호 틀림'
         login_logs.append(log)
+        increment_fail_in_firestore(email, '비밀번호 틀림')
         return jsonify({'status': 'fail', 'message': '비밀번호가 틀렸습니다.'}), 403
 
     log['status'] = 'success'
