@@ -83,7 +83,7 @@ def send_security_alert(email, location_info):
 이메일: {email}
 IP: {location_info['ip']}
 위치: {location_info.get('city')}, {location_info.get('region')}, {location_info.get('country')}
-시간: {datetime.datetime.utcnow().isoformat()} UTC
+시간: {datetime.utcnow().isoformat()} UTC
 """
     send_email(email, subject, body)
 
