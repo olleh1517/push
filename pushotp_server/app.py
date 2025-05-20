@@ -219,9 +219,7 @@ def verify_email():
 
     pending = doc.to_dict()
     created_at = pending.get('created_at')
-    if not created_at:
-        return jsonify({'status': 'fail', 'message': '인증 정보가 잘못되었습니다.'}), 400
-    if not created_at or (datetime.datetime.utcnow() - created_at.replace(tzinfo=None)).total_seconds() > 300:
+    if not created_at or (datetime.now(timezone.utc) - created_at).total_seconds() > 300:
         return jsonify({'status': 'fail', 'message': '인증코드가 만료되었습니다.'}), 400
 
     if pending['code'] != code:
