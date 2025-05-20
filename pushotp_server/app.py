@@ -219,6 +219,8 @@ def verify_email():
 
     pending = doc.to_dict()
     created_at = pending.get('created_at')
+    if not created_at:
+        return jsonify({'status': 'fail', 'message': '인증 정보가 잘못되었습니다.'}), 400
     if not created_at or (datetime.datetime.utcnow() - created_at.replace(tzinfo=None)).total_seconds() > 300:
         return jsonify({'status': 'fail', 'message': '인증코드가 만료되었습니다.'}), 400
 
@@ -229,12 +231,12 @@ def verify_email():
     hashed_pw = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
     db.collection('pending_codes').document(email).set({
-         'code': pending['code'],
-         'device_token': pending['device_token'],
-         'hashed_pw': hashed_pw,
-         'plain_pw': password,  # 🟡 Firebase 사용자 등록용으로만 사용
-         'created_at': pending['created_at']
-    })
+        'code': pending['code'],
+        'device_token': pending['device_token'],
+        'hashed_pw': hashed_pw,
+        'plain_pw': password,
+        'created_at': pending['created_at']
+    }, merge=True)
 
     send_admin_approval_email(email, pending['device_token'])
 
