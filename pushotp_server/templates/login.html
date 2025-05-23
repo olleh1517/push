@@ -137,6 +137,12 @@
         body: JSON.stringify({ email, device_token: deviceToken })
       });
 
+      if (res.ok && data.status === 'already_registered') {
+        messageP.textContent = data.message || '이미 등록된 기기입니다.';
+        verifyDeviceSection.style.display = 'none';
+        return;
+      }
+
       const data = await res.json();
       if (res.ok && data.status === 'ok') {
         messageP.textContent = '이메일로 인증코드를 전송했습니다.';

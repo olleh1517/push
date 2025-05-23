@@ -356,6 +356,10 @@ def request_device_code():
     if not user:
         return jsonify({'status': 'fail', 'message': '존재하지 않는 사용자입니다.'}), 404
 
+    if device_token in user.get('device_tokens', []):
+        return jsonify({'status': 'already_registered', 'message': '이미 등록된 기기입니다.'}), 200
+
+    # 중복이 아니면 인증코드 생성
     code = str(random.randint(100000, 999999))
     db.collection('device_verify_codes').document(email).set({
         'code': code,
@@ -366,25 +370,38 @@ def request_device_code():
     send_verification_email(email, code)
     return jsonify({'status': 'ok', 'message': '인증코드가 전송되었습니다.'})
 
+
 @app.route('/verify-device-code', methods=['POST'])
-def register_device():
-    data = request.json
+def verify_device_code():
+    data = request.get_json()
     email = data.get('email')
-    password = data.get('password')
     device_token = data.get('device_token')
+    code = data.get('code')
 
-    if not all([email, password, device_token]):
-        return jsonify({'status': 'fail', 'message': '이메일, 비밀번호, 기기 토큰 모두 필요합니다.'}), 400
+    if not all([email, device_token, code]):
+        return jsonify({'status': 'fail', 'message': '이메일, 기기 토큰, 인증코드가 모두 필요합니다.'}), 400
 
-    # 사용자 존재 및 승인 여부 확인
+    # 인증코드 검증
+    doc = db.collection('device_verify_codes').document(email).get()
+    if not doc.exists:
+        return jsonify({'status': 'fail', 'message': '인증 요청이 없습니다.'}), 400
+
+    info = doc.to_dict()
+    if info.get('device_token') != device_token:
+        return jsonify({'status': 'fail', 'message': '기기 토큰이 일치하지 않습니다.'}), 400
+
+    if info.get('code') != code:
+        return jsonify({'status': 'fail', 'message': '인증코드가 틀렸습니다.'}), 400
+
+    # 시간 만료 확인 (예: 5분)
+    created_at = info.get('created_at')
+    if created_at and (datetime.now(timezone.utc) - created_at).total_seconds() > 300:
+        return jsonify({'status': 'fail', 'message': '인증코드가 만료되었습니다.'}), 400
+
+    # 사용자 조회
     user_info = get_user(email)
     if not user_info or not user_info.get('approved', False):
         return jsonify({'status': 'fail', 'message': '승인된 사용자가 아닙니다.'}), 403
-
-    # 비밀번호 검증
-    hashed_pw = user_info.get('password') or user_info.get('hashed_pw')
-    if not hashed_pw or not bcrypt.checkpw(password.encode(), hashed_pw.encode()):
-        return jsonify({'status': 'fail', 'message': '비밀번호가 틀렸습니다.'}), 403
 
     # 이미 등록된 기기인지 확인
     if device_token in user_info.get('device_tokens', []):
@@ -394,7 +411,11 @@ def register_device():
     user_info['device_tokens'].append(device_token)
     save_user(email, user_info)
 
+    # 인증코드 문서 삭제
+    db.collection('device_verify_codes').document(email).delete()
+
     return jsonify({'status': 'ok', 'message': '기기 등록이 완료되었습니다.'})
+
 
 
 
