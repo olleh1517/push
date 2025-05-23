@@ -66,7 +66,7 @@ def index():
 # ✅ 라우트 1: 회원가입 페이지
 @app.route('/signup', methods=['GET'])
 def signup_page():
-    return render_template('signup_otp.html')
+    return render_template('signup.html')
 
 @app.route('/signup', methods=['POST'])
 def signup_post():
