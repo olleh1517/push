@@ -343,7 +343,30 @@ def admin_page():
 def login_page():
     return render_template('login.html')
 
-@app.route('/register-device', methods=['POST'])
+@app.route('/request-device-code', methods=['POST'])
+def request_device_code():
+    data = request.get_json()
+    email = data.get('email')
+    device_token = data.get('device_token')
+
+    if not email or not device_token:
+        return jsonify({'status': 'fail', 'message': '이메일과 기기 토큰이 필요합니다.'}), 400
+
+    user = get_user(email)
+    if not user:
+        return jsonify({'status': 'fail', 'message': '존재하지 않는 사용자입니다.'}), 404
+
+    code = str(random.randint(100000, 999999))
+    db.collection('device_verify_codes').document(email).set({
+        'code': code,
+        'device_token': device_token,
+        'created_at': firestore.SERVER_TIMESTAMP
+    })
+
+    send_verification_email(email, code)
+    return jsonify({'status': 'ok', 'message': '인증코드가 전송되었습니다.'})
+
+@app.route('/verify-device-code', methods=['POST'])
 def register_device():
     data = request.json
     email = data.get('email')
