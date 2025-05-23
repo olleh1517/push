@@ -349,6 +349,8 @@ def request_device_code():
     email = data.get('email')
     device_token = data.get('device_token')
 
+    print("신청 기기 토큰" + device_token + "현재 유저 기기 토큰 목록" + user.get('device_tokens', []))
+
     if not email or not device_token:
         return jsonify({'status': 'fail', 'message': '이메일과 기기 토큰이 필요합니다.'}), 400
 
