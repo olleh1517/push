@@ -349,8 +349,6 @@ def request_device_code():
     email = data.get('email')
     device_token = data.get('device_token')
 
-    print("신청 기기 토큰" + device_token + "현재 유저 기기 토큰 목록" + user.get('device_tokens', []))
-
     if not email or not device_token:
         return jsonify({'status': 'fail', 'message': '이메일과 기기 토큰이 필요합니다.'}), 400
 
@@ -358,10 +356,14 @@ def request_device_code():
     if not user:
         return jsonify({'status': 'fail', 'message': '존재하지 않는 사용자입니다.'}), 404
 
+    # ✅ 이 위치 이후에 user는 항상 존재
+    print("신청 기기 토큰:", device_token)
+    print("현재 유저 기기 토큰 목록:", user.get('device_tokens', []))
+
+    # 이미 등록된 기기인지 확인
     if device_token in user.get('device_tokens', []):
         return jsonify({'status': 'already_registered', 'message': '이미 등록된 기기입니다.'}), 200
 
-    # 중복이 아니면 인증코드 생성
     code = str(random.randint(100000, 999999))
     db.collection('device_verify_codes').document(email).set({
         'code': code,
@@ -370,7 +372,7 @@ def request_device_code():
     })
 
     send_verification_email(email, code)
-    return jsonify({'status': 'ok', 'message': '인증코드가 전송되었습니다.'})
+    return jsonify({'status': 'ok', 'message': '인증코드가 전송되었습니다.'}))
 
 
 @app.route('/verify-device-code', methods=['POST'])
