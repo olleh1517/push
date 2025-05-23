@@ -1,49 +1,40 @@
-# Step 1: 기존 기기 인증 기능 제거 + 새로운 OTP 사용자 기반 구조 설계
-
-# ✅ 필요한 모듈 임포트
 import os
 import random
 import bcrypt
 import pyotp
+import qrcode
+import io
+import base64
 from datetime import datetime, timezone
 from flask import Flask, request, jsonify, render_template, redirect
 from dotenv import load_dotenv
 import firebase_admin
-from firebase_admin import credentials, auth as firebase_auth, firestore
-import qrcode
-import io
-import base64
-
+from firebase_admin import credentials, firestore
 import smtplib
 from email.mime.text import MIMEText
 
-# ✅ 초기 설정
+# Load .env configuration
 load_dotenv()
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'default_secret_key')
 
+# Firebase Admin SDK init
 firebase_credentials_path = "/etc/secrets/firebase_credentials.json"
 if not firebase_admin._apps:
     cred = credentials.Certificate(firebase_credentials_path)
     firebase_admin.initialize_app(cred)
 
 db = firestore.client()
+login_logs = []
 
-# ✅ 유틸 함수들
-
-def save_user_otp(email, data):
-    db.collection('users_otp').document(email).set(data)
-
-def get_user_otp(email):
-    doc = db.collection('users_otp').document(email).get()
-    return doc.to_dict() if doc.exists else None
-
+# Email Setup
 SMTP_SERVER = 'smtp.gmail.com'
 SMTP_PORT = 587
 SMTP_EMAIL = os.getenv('SMTP_EMAIL')
 SMTP_PASSWORD = os.getenv('SMTP_PASSWORD')
-login_logs = []
 
+# Utility Functions
 def send_email(to, subject, body):
     msg = MIMEText(body)
     msg['Subject'] = subject
@@ -58,12 +49,18 @@ def send_email(to, subject, body):
     except Exception as e:
         print(f"[이메일 전송 실패] {e}")
         return False
-    
+
+def save_user_otp(email, data):
+    db.collection('users_otp').document(email).set(data)
+
+def get_user_otp(email):
+    doc = db.collection('users_otp').document(email).get()
+    return doc.to_dict() if doc.exists else None
+
 @app.route('/')
 def index():
     return redirect('/signup')
 
-# ✅ 라우트 1: 회원가입 페이지
 @app.route('/signup', methods=['GET'])
 def signup_page():
     return render_template('signup.html')
@@ -80,20 +77,23 @@ def signup_post():
     if get_user_otp(email):
         return jsonify({'status': 'fail', 'message': '이미 가입된 이메일입니다.'}), 400
 
+    verified_doc = db.collection('pending_signup_codes').document(email).get()
+    if not verified_doc.exists:
+        return jsonify({'status': 'fail', 'message': '인증되지 않은 사용자입니다.'}), 403
+
     hashed_pw = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
     otp_secret = pyotp.random_base32()
 
     save_user_otp(email, {
         'email': email,
-        'password': hashed_pw,
+        'hashed_pw': hashed_pw,
         'otp_secret': otp_secret,
         'approved': True
     })
 
-    # OTP URI 생성
-    otp_uri = pyotp.totp.TOTP(otp_secret).provisioning_uri(name=email, issuer_name="PushOTP")
+    db.collection('pending_signup_codes').document(email).delete()
 
-    # 🔽 QR 코드 이미지 생성
+    otp_uri = pyotp.TOTP(otp_secret).provisioning_uri(name=email, issuer_name="PushOTP")
     img = qrcode.make(otp_uri)
     buf = io.BytesIO()
     img.save(buf, format='PNG')
@@ -119,7 +119,6 @@ def request_signup_code():
         'created_at': datetime.now(timezone.utc)
     })
 
-    # 이메일 전송
     send_email(email, 'PushOTP 가입 인증코드', f'인증코드: {code}')
     return jsonify({'status': 'ok', 'message': '인증코드를 이메일로 전송했습니다.'})
 
@@ -137,12 +136,10 @@ def verify_signup_code():
     if record['code'] != code:
         return jsonify({'status': 'fail', 'message': '인증코드가 틀렸습니다.'}), 403
 
-    # 시간 만료 검증 (예: 5분)
     if (datetime.now(timezone.utc) - record['created_at']).total_seconds() > 300:
         return jsonify({'status': 'fail', 'message': '인증코드가 만료되었습니다.'}), 400
 
     return jsonify({'status': 'ok', 'message': '인증 완료'})
-
 
 @app.route('/login-otp', methods=['POST'])
 def login_otp():
@@ -184,7 +181,6 @@ def login_otp():
     log.update({'status': 'success', 'reason': '로그인 성공'})
     login_logs.append(log)
     return jsonify({'status': 'ok', 'message': '로그인 성공'})
-
 
 @app.route('/admin')
 def admin_page():
