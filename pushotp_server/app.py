@@ -102,6 +102,7 @@ def signup_post():
     return jsonify({
         'status': 'ok',
         'qr_code_base64': qr_b64,
+        'otp_uri': otp_uri,
         'message': '가입 완료! 아래 QR을 OTP 앱으로 스캔하세요.'
     })
 
@@ -140,6 +141,10 @@ def verify_signup_code():
         return jsonify({'status': 'fail', 'message': '인증코드가 만료되었습니다.'}), 400
 
     return jsonify({'status': 'ok', 'message': '인증 완료'})
+
+@app.route('/login', methods=['GET'])
+def login_page():
+    return render_template('login.html')
 
 @app.route('/login-otp', methods=['POST'])
 def login_otp():
