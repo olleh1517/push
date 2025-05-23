@@ -58,6 +58,10 @@ def send_email(to, subject, body):
     except Exception as e:
         print(f"[이메일 전송 실패] {e}")
         return False
+    
+@app.route('/')
+def index():
+    return redirect('/signup')
 
 # ✅ 라우트 1: 회원가입 페이지
 @app.route('/signup', methods=['GET'])
