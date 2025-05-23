@@ -72,10 +72,6 @@ def send_verification_email(email, code):
     body = f"인증 코드: {code}"
     return send_email(email, subject, body)
 
-def send_admin_approval_email(email, device_token, is_new_user=True):
-    subject = "회원가입 승인 요청" if is_new_user else "기기 등록 승인 요청"
-    body = f"이메일: {email}\n기기 토큰: {device_token}\n\n관리자 페이지에서 승인을 진행해주세요."
-    send_email(ADMIN_EMAIL, subject, body)
 
 def send_security_alert(email, location_info):
     subject = "보안 경고: 허가되지 않은 기기에서 로그인 시도"
@@ -120,12 +116,9 @@ def load_all_users():
 def load_pending():
     return { doc.id: doc.to_dict() for doc in db.collection('pending_codes').stream() }
 
-# Firestore에 실패 횟수 증가
-from datetime import datetime, timezone
 
 # 실패 기록 추가 함수
 def increment_fail_in_firestore(email, reason):
-    from datetime import datetime, timezone
 
     doc_ref = db.collection('failed_attempts').document(email)
     doc = doc_ref.get()
@@ -236,9 +229,20 @@ def verify_email():
         'created_at': pending['created_at']
     }, merge=True)
 
-    send_admin_approval_email(email, pending['device_token'])
+    try:
+        firebase_auth.create_user(email=email, password=password)
+    except firebase_auth.EmailAlreadyExistsError:
+        pass
 
-    return jsonify({'status': 'pending', 'message': '가입 신청 완료. 승인을 기다려 주세요.'})
+    # Firestore에 최종 사용자 저장
+    save_user(email, {
+        'password': hashed_pw,
+        'device_tokens': [pending['device_token']],
+        'approved': True
+    })
+
+    db.collection('pending_codes').document(email).delete()
+    return jsonify({'status': 'ok', 'message': '가입이 완료되었습니다.'})
 
 
 @app.route('/check-approval', methods=['POST'])
@@ -327,115 +331,6 @@ def login_post():
     return jsonify({'status': 'ok', 'message': '로그인 성공'})
 
 
-@app.route('/commit', methods=['GET', 'POST'])
-def commit_page():
-    all_users = load_all_users()
-    pending_users = {email: info for email, info in all_users.items() if not info.get('approved')}
-
-    # ✅ 여기 추가: pending_codes 컬렉션 불러오기
-    pending_codes = load_pending()
-
-    pending_devices = {
-        email: info['pending_device_tokens']
-        for email, info in all_users.items()
-        if info.get('approved') and info.get('pending_device_tokens')
-    }
-
-    return render_template(
-        'commit.html',
-        pending_users=pending_users,
-        pending_devices=pending_devices,
-        pending_codes=pending_codes  # 템플릿에서 이 값으로 표시
-    )
-
-
-
-@app.route('/commit/approve-user', methods=['POST'])
-def approve_user():
-    data = request.get_json()
-    email = data.get('email')
-
-    doc = db.collection('pending_codes').document(email).get()
-    if not email or not doc.exists:
-        return jsonify({'status': 'fail', 'message': '이메일 오류'}), 400
-
-    info = doc.to_dict()
-
-    # 🔍 비밀번호 유효성 검사
-    if 'plain_pw' not in info or not info['plain_pw']:
-        print("if 'plain_pw' not in info or not info['plain_pw']: 이거 오류 뜸뜸")
-        return jsonify({'status': 'fail', 'message': '비밀번호 정보가 누락되었습니다.'}), 400
-
-    try:
-        firebase_auth.create_user(
-            email=email,
-            password=info['plain_pw']
-        )
-    except firebase_auth.EmailAlreadyExistsError:
-        pass
-    except Exception as e:
-        return jsonify({'status': 'fail', 'message': f'Firebase 등록 실패: {str(e)}'}), 500
-
-    save_user(email, {
-        'password': info['hashed_pw'],
-        'device_tokens': [info['device_token']],
-        'approved': True
-    })
-
-    db.collection('pending_codes').document(email).delete()
-    return jsonify({'status': 'ok', 'message': '승인 및 등록 완료'})
-
-
-
-@app.route('/commit/reject-user', methods=['POST'])
-def reject_user():
-    data = request.get_json()
-    email = data.get('email')
-    user = get_user(email)
-
-    if not email or not user:
-        return jsonify({'status': 'fail', 'message': '이메일 오류'}), 400
-    if user.get('approved'):
-        return jsonify({'status': 'fail', 'message': '이미 승인된 사용자입니다.'}), 400
-
-    # Firestore 문서 삭제
-    db.collection('users').document(email).delete()
-
-    return jsonify({'status': 'ok', 'message': '가입 요청 거부됨'})
-
-@app.route('/commit/approve-device', methods=['POST'])
-def approve_device():
-    data = request.get_json()
-    email = data.get('email')
-    device_token = data.get('device_token')
-
-    user = get_user(email)
-    if not user or device_token not in user.get('pending_device_tokens', []):
-        return jsonify({'status': 'fail', 'message': '승인 대상이 올바르지 않습니다.'}), 400
-
-    user['device_tokens'].append(device_token)
-    user['pending_device_tokens'].remove(device_token)
-    save_user(email, user)  # 🔁 Firestore에 변경 사항 저장
-
-    return jsonify({'status': 'ok', 'message': '기기 등록 승인됨'})
-
-
-@app.route('/commit/reject-device', methods=['POST'])
-def reject_device():
-    data = request.get_json()
-    email = data.get('email')
-    device_token = data.get('device_token')
-
-    user = get_user(email)
-    if not user or device_token not in user.get('pending_device_tokens', []):
-        return jsonify({'status': 'fail', 'message': '거부 대상이 올바르지 않습니다.'}), 400
-
-    user['pending_device_tokens'].remove(device_token)
-    save_user(email, user)  # 🔁 Firestore에 변경 사항 저장
-
-    return jsonify({'status': 'ok', 'message': '기기 등록 거부됨'})
-
-
 @app.route('/admin')
 def admin_page():
     all_users = load_all_users()
@@ -447,7 +342,7 @@ def admin_page():
 @app.route('/login', methods=['GET'])
 def login_page():
     return render_template('login.html')
-    
+
 @app.route('/register-device', methods=['POST'])
 def register_device():
     data = request.json
@@ -458,31 +353,25 @@ def register_device():
     if not all([email, password, device_token]):
         return jsonify({'status': 'fail', 'message': '이메일, 비밀번호, 기기 토큰 모두 필요합니다.'}), 400
 
-    # 사용자 존재 확인
-    try:
-        user_record = firebase_auth.get_user_by_email(email)
-    except firebase_auth.UserNotFoundError:
-        return jsonify({'status': 'fail', 'message': '등록되지 않은 이메일입니다.'}), 404
-
+    # 사용자 존재 및 승인 여부 확인
     user_info = get_user(email)
     if not user_info or not user_info.get('approved', False):
         return jsonify({'status': 'fail', 'message': '승인된 사용자가 아닙니다.'}), 403
 
+    # 비밀번호 검증
+    hashed_pw = user_info.get('password') or user_info.get('hashed_pw')
+    if not hashed_pw or not bcrypt.checkpw(password.encode(), hashed_pw.encode()):
+        return jsonify({'status': 'fail', 'message': '비밀번호가 틀렸습니다.'}), 403
+
+    # 이미 등록된 기기인지 확인
     if device_token in user_info.get('device_tokens', []):
         return jsonify({'status': 'already_registered', 'message': '이미 등록된 기기입니다.'})
 
-    if 'pending_device_tokens' not in user_info:
-        user_info['pending_device_tokens'] = []
-    if device_token in user_info['pending_device_tokens']:
-        return jsonify({'status': 'fail', 'message': '이미 등록 요청 중인 기기입니다.'})
-
-    # 🔥 여기가 핵심: Firestore에 업데이트
-    user_info['pending_device_tokens'].append(device_token)
+    # 기기 등록
+    user_info['device_tokens'].append(device_token)
     save_user(email, user_info)
 
-    send_admin_approval_email(email, device_token, is_new_user=False)
-
-    return jsonify({'status': 'pending', 'message': '기기 등록 신청 완료. 관리자의 승인을 기다려 주세요.'})
+    return jsonify({'status': 'ok', 'message': '기기 등록이 완료되었습니다.'})
 
 
 
