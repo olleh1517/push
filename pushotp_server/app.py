@@ -372,7 +372,7 @@ def request_device_code():
     })
 
     send_verification_email(email, code)
-    return jsonify({'status': 'ok', 'message': '인증코드가 전송되었습니다.'}))
+    return jsonify({'status': 'ok', 'message': '인증코드가 전송되었습니다.'})
 
 
 @app.route('/verify-device-code', methods=['POST'])
