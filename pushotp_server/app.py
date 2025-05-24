@@ -58,6 +58,17 @@ def get_user_otp(email):
     print("가입하려는 이메일 :" + email + "get_user_otp결과 :" + "doc")
     return doc.to_dict() if doc.exists else None
 
+def update_fail_count(email, reason):
+    ref = db.collection('failed_otp_attempts').document(email)
+    doc = ref.get()
+    data = doc.to_dict() if doc.exists else {}
+    count = data.get('count', 0) + 1
+    ref.set({
+        'count': count,
+        'last_reason': reason,
+        'last_failed_at': datetime.now(timezone.utc)
+    }, merge=True)
+
 @app.route('/')
 def index():
     return redirect('/signup')
@@ -66,47 +77,6 @@ def index():
 def signup_page():
     return render_template('signup.html')
 
-@app.route('/signup', methods=['POST'])
-def signup_post():
-    data = request.json
-    email = data.get('email')
-    password = data.get('password')
-
-    if not email or not password:
-        return jsonify({'status': 'fail', 'message': '이메일과 비밀번호가 필요합니다.'}), 400
-
-    if get_user_otp(email):
-        return jsonify({'status': 'fail', 'message': '이미 가입된 이메일입니다.'}), 400
-
-    verified_doc = db.collection('pending_signup_codes').document(email).get()
-    if not verified_doc.exists:
-        return jsonify({'status': 'fail', 'message': '인증되지 않은 사용자입니다.'}), 403
-
-    hashed_pw = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-    otp_secret = pyotp.random_base32()
-
-    save_user_otp(email, {
-        'email': email,
-        'hashed_pw': hashed_pw,
-        'otp_secret': otp_secret,
-        'approved': True
-    })
-
-    db.collection('pending_signup_codes').document(email).delete()
-
-    otp_uri = pyotp.TOTP(otp_secret).provisioning_uri(name=email, issuer_name="PushOTP")
-    img = qrcode.make(otp_uri)
-    buf = io.BytesIO()
-    img.save(buf, format='PNG')
-    qr_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
-
-    return jsonify({
-        'status': 'ok',
-        'qr_code_base64': qr_b64,
-        'otp_uri': otp_uri,
-        'message': '가입 완료! 아래 QR을 OTP 앱으로 스캔하세요.'
-    })
-
 @app.route('/request-signup-code', methods=['POST'])
 def request_signup_code():
     data = request.get_json()
@@ -114,6 +84,9 @@ def request_signup_code():
 
     if not email:
         return jsonify({'status': 'fail', 'message': '이메일이 필요합니다.'}), 400
+    
+    if get_user_otp(email):
+        return jsonify({'status': 'fail', 'message': '이미 가입된 이메일입니다.'}), 400
 
     code = str(random.randint(100000, 999999))
     db.collection('pending_signup_codes').document(email).set({
@@ -143,6 +116,43 @@ def verify_signup_code():
 
     return jsonify({'status': 'ok', 'message': '인증 완료'})
 
+@app.route('/signup', methods=['POST'])
+def signup_post():
+    data = request.json
+    email = data.get('email')
+    password = data.get('password')
+
+    if not email or not password:
+        return jsonify({'status': 'fail', 'message': '이메일과 비밀번호가 필요합니다.'}), 400
+    # 혹시 모르는 유효성 검사사
+
+    # 이미 인증한 이메일이면 signup 진행
+    hashed_pw = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    otp_secret = pyotp.random_base32()
+
+    save_user_otp(email, {
+        'email': email,
+        'hashed_pw': hashed_pw,
+        'otp_secret': otp_secret,
+        'approved': True
+    })
+
+    # 임시 인증 문서 삭제 이미 회원가입이 완료됨.
+    db.collection('pending_signup_codes').document(email).delete()
+
+    otp_uri = pyotp.TOTP(otp_secret).provisioning_uri(name=email, issuer_name="PushOTP")
+    img = qrcode.make(otp_uri)
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    qr_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+
+    return jsonify({
+        'status': 'ok',
+        'qr_code_base64': qr_b64,
+        'otp_uri': otp_uri,
+        'message': '가입 완료! OTP 앱으로 스캔하세요.'
+    })
+
 @app.route('/login', methods=['GET'])
 def login_page():
     return render_template('login.html')
@@ -153,13 +163,22 @@ def login_otp():
     email = data.get('email')
     password = data.get('password')
     otp_code = data.get('otp')
-    ip = request.headers.get('X-Forwarded-For', request.remote_addr)
 
     log = {
         'email': email,
         'timestamp': datetime.now(timezone.utc).isoformat(),
-        'ip': ip,
     }
+
+    # 🔒 로그인 실패 차단 여부 확인
+    attempt_doc = db.collection('failed_otp_attempts').document(email).get()
+    if attempt_doc.exists:
+        attempt_data = attempt_doc.to_dict()
+        count = attempt_data.get('count', 0)
+        last_failed = attempt_data.get('last_failed_at')
+        if count >= 3 and last_failed:
+            elapsed = datetime.utcnow() - last_failed.replace(tzinfo=None)
+            if elapsed.total_seconds() < 300:
+                return jsonify({'status': 'fail', 'message': '로그인 시도 3회 초과로 5분간 차단됩니다.'}), 403
 
     if not all([email, password, otp_code]):
         log.update({'status': 'fail', 'reason': '입력 누락'})
@@ -176,17 +195,23 @@ def login_otp():
     if not bcrypt.checkpw(password.encode(), info.get('hashed_pw', '').encode()):
         log.update({'status': 'fail', 'reason': '비밀번호 틀림'})
         login_logs.append(log)
+        update_fail_count(email, '비밀번호 틀림')
         return jsonify({'status': 'fail', 'message': '비밀번호가 틀렸습니다.'}), 403
 
     totp = pyotp.TOTP(info.get('otp_secret'))
     if not totp.verify(otp_code):
         log.update({'status': 'fail', 'reason': 'OTP 실패'})
         login_logs.append(log)
+        update_fail_count(email, 'OTP 실패')
         return jsonify({'status': 'fail', 'message': 'OTP 코드가 틀렸습니다.'}), 403
+
+    # 로그인 성공 시 실패 기록 초기화
+    db.collection('failed_otp_attempts').document(email).delete()
 
     log.update({'status': 'success', 'reason': '로그인 성공'})
     login_logs.append(log)
     return jsonify({'status': 'ok', 'message': '로그인 성공'})
+
 
 @app.route('/admin')
 def admin_page():
