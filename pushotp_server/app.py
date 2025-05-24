@@ -69,6 +69,35 @@ def update_fail_count(email, reason):
         'last_failed_at': datetime.now(timezone.utc)
     }, merge=True)
 
+def update_fail_count(email, reason, ip=None):
+    ref = db.collection('failed_otp_attempts').document(email)
+    doc = ref.get()
+    data = doc.to_dict() if doc.exists else {}
+    count = data.get('count', 0) + 1
+    now = datetime.now(timezone.utc)
+
+    ref.set({
+        'count': count,
+        'last_reason': reason,
+        'last_failed_at': now
+    }, merge=True)
+
+    if count >= 3:
+        ip_info = f"\nIP 주소: {ip}" if ip else ""
+        send_email(
+            email,
+            '⚠️ 보안 경고: 로그인 실패가 반복되었습니다.',
+            f'''[PushOTP 보안 경고]
+
+{email} 계정으로 로그인 시도가 반복적으로 실패했습니다.
+
+- 실패 사유: {reason}
+- 실패 시간: {now.isoformat()} UTC{ip_info}
+
+※ 본인이 아닌 경우 즉시 비밀번호를 변경하시고, 의심되는 기기에서 로그아웃하세요.
+'''
+        )
+
 @app.route('/')
 def index():
     return redirect('/signup')
@@ -163,22 +192,26 @@ def login_otp():
     email = data.get('email')
     password = data.get('password')
     otp_code = data.get('otp')
+    ip = request.headers.get('X-Forwarded-For', request.remote_addr)
 
     log = {
         'email': email,
         'timestamp': datetime.now(timezone.utc).isoformat(),
     }
 
-    # 🔒 로그인 실패 차단 여부 확인
     attempt_doc = db.collection('failed_otp_attempts').document(email).get()
     if attempt_doc.exists:
         attempt_data = attempt_doc.to_dict()
         count = attempt_data.get('count', 0)
         last_failed = attempt_data.get('last_failed_at')
+
         if count >= 3 and last_failed:
             elapsed = datetime.utcnow() - last_failed.replace(tzinfo=None)
             if elapsed.total_seconds() < 300:
                 return jsonify({'status': 'fail', 'message': '로그인 시도 3회 초과로 5분간 차단됩니다.'}), 403
+            else:
+                # 제한 시간 초과 시 기록 초기화
+                db.collection('failed_otp_attempts').document(email).delete()
 
     if not all([email, password, otp_code]):
         log.update({'status': 'fail', 'reason': '입력 누락'})
@@ -195,17 +228,17 @@ def login_otp():
     if not bcrypt.checkpw(password.encode(), info.get('hashed_pw', '').encode()):
         log.update({'status': 'fail', 'reason': '비밀번호 틀림'})
         login_logs.append(log)
-        update_fail_count(email, '비밀번호 틀림')
+        update_fail_count(email, '비밀번호 틀림', ip)
         return jsonify({'status': 'fail', 'message': '비밀번호가 틀렸습니다.'}), 403
 
     totp = pyotp.TOTP(info.get('otp_secret'))
     if not totp.verify(otp_code):
         log.update({'status': 'fail', 'reason': 'OTP 실패'})
         login_logs.append(log)
-        update_fail_count(email, 'OTP 실패')
+        update_fail_count(email, 'OTP 실패', ip)
         return jsonify({'status': 'fail', 'message': 'OTP 코드가 틀렸습니다.'}), 403
 
-    # 로그인 성공 시 실패 기록 초기화
+    # ✅ 로그인 성공 시 실패 기록 초기화
     db.collection('failed_otp_attempts').document(email).delete()
 
     log.update({'status': 'success', 'reason': '로그인 성공'})
