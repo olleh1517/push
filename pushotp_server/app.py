@@ -55,6 +55,7 @@ def save_user_otp(email, data):
 
 def get_user_otp(email):
     doc = db.collection('users_otp').document(email).get()
+    print("가입하려는 이메일 :" + email + "get_user_otp결과 :" + "doc")
     return doc.to_dict() if doc.exists else None
 
 @app.route('/')
