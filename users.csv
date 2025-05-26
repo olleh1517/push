@@ -1,0 +1,12 @@
+email,password,device_id,push,otp
+user1@example.com,password123,mydevice,,
+bot1136@example.com,wrongpass1136,deviceX,yes,123456
+bot1985@example.com,wrongpass1985,bad_device,yes,123456
+bot3192@example.com,wrongpass3192,wrong_device,yes,123456
+bot3800@example.com,wrongpass3800,deviceX,yes,
+bot4769@example.com,wrongpass4769,deviceX,,123456
+bot4899@example.com,wrongpass4899,,yes,
+bot5949@example.com,wrongpass5949,,,123456
+bot7148@example.com,wrongpass7148,deviceX,,
+bot7332@example.com,wrongpass7332,deviceX,yes,wrong
+bot7517@example.com,wrongpass7517,deviceX,no,123456
