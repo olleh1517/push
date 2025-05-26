@@ -1,0 +1,12 @@
+email,password,device_id
+user1@example.com,password123,mydevice
+bot0@example.com,wrongpass0,deviceX
+bot1@example.com,wrongpass1,guessed1
+bot2@example.com,wrongpass2,guessed2
+bot3@example.com,wrongpass3,guessed0
+bot4@example.com,wrongpass4,guessed1
+bot5@example.com,wrongpass5,guessed2
+bot6@example.com,wrongpass6,guessed0
+bot7@example.com,wrongpass7,guessed1
+bot8@example.com,wrongpass8,guessed2
+bot9@example.com,wrongpass9,guessed0
