@@ -153,7 +153,7 @@ def signup_post():
 
     if not email or not password:
         return jsonify({'status': 'fail', 'message': '이메일과 비밀번호가 필요합니다.'}), 400
-    # 혹시 모르는 유효성 검사사
+    # check point 
 
     # 이미 인증한 이메일이면 signup 진행
     hashed_pw = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
