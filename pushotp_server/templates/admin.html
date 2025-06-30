@@ -4,95 +4,225 @@
   <meta charset="UTF-8" />
   <title>관리자 - 로그인 기록</title>
   <style>
-    body {
-      font-family: sans-serif;
+    :root {
+      --primary: #007bff;
+      --primary-dark: #0056b3;
+      --sidebar-bg: #f8fafc;
+      --sidebar-border: #e0e0e0;
+      --sidebar-width: 220px;
+      --main-bg: #f4f6fa;
+      --card-bg: #fff;
+      --card-shadow: 0 2px 12px rgba(0,0,0,0.07);
+      --text-main: #222;
+      --text-sub: #555;
+      --accent: #00b894;
+    }
+    html, body {
+      height: 100%;
       margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: 'Segoe UI', 'Noto Sans KR', Arial, sans-serif;
+      background: var(--main-bg);
+      color: var(--text-main);
+      min-height: 100vh;
       display: flex;
     }
-
     .sidebar {
-      width: 200px;
-      background-color: #f2f2f2;
-      padding: 20px;
+      width: var(--sidebar-width);
+      background: var(--sidebar-bg);
+      border-right: 1px solid var(--sidebar-border);
+      padding: 32px 20px 20px 20px;
       height: 100vh;
-      box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      box-shadow: 2px 0 8px rgba(0,0,0,0.04);
+      position: fixed;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      z-index: 10;
     }
-
     .sidebar h3 {
       margin-top: 0;
+      margin-bottom: 32px;
+      font-size: 1.3rem;
+      letter-spacing: 1px;
+      color: var(--primary-dark);
+      text-align: center;
+      font-weight: 700;
     }
-
     .sidebar a {
       display: block;
-      margin-bottom: 10px;
-      padding: 10px;
+      margin-bottom: 14px;
+      padding: 12px 0;
       text-align: center;
-      background-color: #007bff;
-      color: white;
+      background: var(--primary);
+      color: #fff;
       text-decoration: none;
-      border-radius: 4px;
+      border-radius: 6px;
+      font-weight: 500;
+      font-size: 1.05rem;
+      letter-spacing: 0.5px;
+      box-shadow: 0 2px 8px rgba(0,123,255,0.07);
+      transition: background 0.2s, box-shadow 0.2s, transform 0.15s;
     }
-
-    .sidebar a:hover {
-      background-color: #0056b3;
+    .sidebar a:hover, .sidebar a.active {
+      background: var(--primary-dark);
+      box-shadow: 0 4px 16px rgba(0,123,255,0.13);
+      transform: translateY(-2px) scale(1.03);
     }
-
-    .main {
-      flex-grow: 1;
-      padding: 20px;
+    .sidebar .logout-btn {
+      margin-top: auto;
+      background: #fff;
+      color: var(--primary-dark);
+      border: 1px solid var(--primary-dark);
+      font-weight: 600;
+      transition: background 0.2s, color 0.2s;
     }
-
+    .sidebar .logout-btn:hover {
+      background: var(--primary-dark);
+      color: #fff;
+    }
+    .main-content {
+      margin-left: var(--sidebar-width);
+      padding: 40px 32px 32px 32px;
+      width: 100%;
+      min-height: 100vh;
+      box-sizing: border-box;
+      background: var(--main-bg);
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .main-content h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 18px;
+      color: var(--primary-dark);
+      letter-spacing: 1px;
+    }
+    .main-content .desc {
+      color: var(--text-sub);
+      margin-bottom: 32px;
+      font-size: 1.08rem;
+    }
+    .card {
+      background: var(--card-bg);
+      border-radius: 14px;
+      box-shadow: var(--card-shadow);
+      padding: 32px 24px;
+      margin-bottom: 32px;
+      transition: box-shadow 0.2s;
+    }
+    .card:hover {
+      box-shadow: 0 6px 24px rgba(0,0,0,0.10);
+    }
     table {
       width: 100%;
       border-collapse: collapse;
+      background: #fff;
+      border-radius: 10px;
+      overflow: hidden;
+      margin-top: 12px;
     }
-
     th, td {
-      border: 1px solid #ccc;
-      padding: 8px;
-      text-align: center;
+      padding: 14px 10px;
+      text-align: left;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 1rem;
     }
-
     th {
-      background-color: #e9e9e9;
+      background: #f6faff;
+      color: var(--primary-dark);
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+    tr:last-child td {
+      border-bottom: none;
+    }
+    .status-success {
+      color: var(--accent);
+      font-weight: 600;
+    }
+    .status-fail {
+      color: #e17055;
+      font-weight: 600;
+    }
+    @media (max-width: 900px) {
+      .main-content { padding: 24px 6vw; }
+      .sidebar { width: 160px; padding: 18px 8px; }
+      .main-content h1 { font-size: 1.3rem; }
+      th, td { font-size: 0.97rem; }
+    }
+    @media (max-width: 600px) {
+      body { flex-direction: column; }
+      .sidebar {
+        position: static;
+        width: 100vw;
+        height: auto;
+        flex-direction: row;
+        justify-content: space-around;
+        box-shadow: none;
+        border-right: none;
+        border-bottom: 1px solid var(--sidebar-border);
+        padding: 10px 0;
+      }
+      .sidebar h3 { display: none; }
+      .sidebar a, .sidebar .logout-btn {
+        margin: 0 4px 0 0;
+        padding: 10px 8px;
+        font-size: 0.98rem;
+        border-radius: 4px;
+      }
+      .main-content { margin-left: 0; padding: 18px 2vw; }
     }
   </style>
 </head>
 <body>
-
-  <div class="sidebar">
+  <nav class="sidebar">
     <h3>관리자 메뉴</h3>
-    <!-- 메뉴 항목 예시: 필요 시 다른 기능 추가 가능 -->
-    <a href="/admin">로그인 기록</a>
-  </div>
-
-  <div class="main">
+    <a href="/admin" class="active">로그인 기록</a>
+    <a href="/admin/users">사용자 관리</a>
+    <a href="/admin/settings">설정</a>
+    <a href="/logout" class="logout-btn">로그아웃</a>
+  </nav>
+  <main class="main-content">
     <h1>로그인 기록</h1>
-    <table>
-      <thead>
-        <tr>
-          <th>이메일</th>
-          <th>로그인 시간</th>
-          <th>상태</th>
-          <th>사유</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for log in logs %}
-        <tr>
-          <td>{{ log.email }}</td>
-          <td>{{ log.timestamp }}</td>
-          <td>{{ log.status or 'N/A' }}</td>
-          <td>{{ log.reason or '' }}</td>
-        </tr>
-        {% else %}
-        <tr>
-          <td colspan="4">로그인 기록이 없습니다.</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-
+    <div class="desc">최근 로그인 시도 및 결과를 확인할 수 있습니다.</div>
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th>이메일</th>
+            <th>IP</th>
+            <th>기기</th>
+            <th>시간</th>
+            <th>결과</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- 로그인 기록 데이터가 서버에서 렌더링됩니다. 예시: -->
+          <tr>
+            <td>admin@example.com</td>
+            <td>192.168.0.1</td>
+            <td>Chrome/Windows</td>
+            <td>2024-06-30 14:22</td>
+            <td class="status-success">성공</td>
+          </tr>
+          <tr>
+            <td>user@sample.com</td>
+            <td>192.168.0.2</td>
+            <td>Safari/iPhone</td>
+            <td>2024-06-30 13:55</td>
+            <td class="status-fail">실패</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
 </body>
 </html>

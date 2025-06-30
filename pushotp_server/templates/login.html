@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <title>로그인 (이메일+비밀번호+기기 토큰)</title>
-
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
@@ -19,44 +19,213 @@
     };
     firebase.initializeApp(firebaseConfig);
   </script>
+  <style>
+    :root {
+      --primary: #007bff;
+      --primary-dark: #0056b3;
+      --accent: #00b894;
+      --danger: #e17055;
+      --bg: #f4f6fa;
+      --card-bg: #fff;
+      --card-shadow: 0 2px 16px rgba(0,0,0,0.07);
+      --radius: 14px;
+      --input-bg: #f8fafc;
+      --input-border: #d0d7e2;
+      --input-focus: #b3d7ff;
+    }
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+    }
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Segoe UI', 'Noto Sans KR', Arial, sans-serif;
+      color: #222;
+    }
+    .login-container {
+      background: var(--card-bg);
+      border-radius: var(--radius);
+      box-shadow: var(--card-shadow);
+      padding: 40px 32px 32px 32px;
+      min-width: 272px; /* 340px의 80% */
+      max-width: 76vw;  /* 95vw의 80% */
+      width: 80%;       /* 100%의 80% */
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 18px;
+      animation: fadeIn 0.7s;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(30px);}
+      to { opacity: 1; transform: translateY(0);}
+    }
+    .login-container h1 {
+      text-align: center;
+      font-size: 2rem;
+      margin-bottom: 10px;
+      color: var(--primary-dark);
+      font-weight: 700;
+      letter-spacing: 1px;
+    }
+    form label {
+      font-weight: 500;
+      margin-bottom: 4px;
+      display: block;
+      color: #333;
+    }
+    form input[type="email"],
+    form input[type="password"],
+    #deviceCodeInput {
+      width: 100%;
+      padding: 12px 10px;
+      margin-bottom: 12px;
+      border: 1.5px solid var(--input-border);
+      border-radius: 7px;
+      background: var(--input-bg);
+      font-size: 1rem;
+      transition: border 0.2s;
+      box-sizing: border-box;
+    }
+    form input:focus, #deviceCodeInput:focus {
+      border-color: var(--input-focus);
+      outline: none;
+      background: #f6fbff;
+    }
+    .btn {
+      width: 20%;
+      padding: 12px 0;
+      border: none;
+      border-radius: 7px;
+      font-size: 1.08rem;
+      font-weight: 600;
+      background: var(--primary);
+      color: #fff;
+      cursor: pointer;
+      margin-bottom: 8px;
+      transition: background 0.18s, box-shadow 0.18s, transform 0.13s;
+      box-shadow: 0 2px 8px rgba(0,123,255,0.07);
+      display: block;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .btn:hover, .btn:focus {
+      background: var(--primary-dark);
+      transform: translateY(-2px) scale(1.03);
+    }
+    .btn-accent {
+      background: var(--accent);
+      color: #fff;
+    }
+    .btn-accent:hover, .btn-accent:focus {
+      background: #009e74;
+    }
+    .btn-outline {
+      background: #fff;
+      color: var(--primary-dark);
+      border: 1.5px solid var(--primary-dark);
+    }
+    .btn-outline:hover, .btn-outline:focus {
+      background: var(--primary-dark);
+      color: #fff;
+    }
+    .toggle-link {
+      color: var(--primary);
+      text-decoration: none;
+      cursor: pointer;
+      font-size: 0.98rem;
+      margin-top: 6px;
+      display: inline-block;
+      text-align: right;
+      transition: text-decoration 0.2s;
+    }
+    .toggle-link:focus,
+    .toggle-link:hover {
+      text-decoration: underline;
+    }
+    #message {
+      min-height: 22px;
+      text-align: center;
+      font-size: 1.02rem;
+      margin: 0 0 8px 0;
+      color: var(--danger);
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    #message.success {
+      color: var(--accent);
+    }
+    #welcomeSection {
+      text-align: center;
+      margin-top: 18px;
+    }
+    #welcomeSection h2 {
+      color: var(--primary-dark);
+      font-size: 1.3rem;
+      margin-bottom: 18px;
+    }
+    #verifyDeviceSection {
+      background: #f8fafc;
+      border-radius: 8px;
+      padding: 18px 12px 12px 12px;
+      margin-top: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+      text-align: center;
+    }
+    #verifyDeviceSection h3 {
+      margin-top: 0;
+      font-size: 1.08rem;
+      color: var(--primary-dark);
+    }
+    @media (max-width: 600px) {
+      .login-container {
+        min-width: 0;
+        padding: 18px 4vw;
+        width: 96%;
+        max-width: 98vw;
+      }
+      .login-container h1 { font-size: 1.3rem; }
+    }
+  </style>
 </head>
 <body>
-  <h1>로그인</h1>
+  <div class="login-container">
+    <h1>로그인</h1>
+    <form id="loginForm">
+      <label for="email">이메일</label>
+      <input type="email" id="email" name="email" required autocomplete="username" />
+      <label for="password">비밀번호</label>
+      <input type="password" id="password" name="password" required autocomplete="current-password" />
+      <button type="submit" id="loginBtn" class="btn">로그인</button>
+      <button type="button" id="registerDeviceBtn" class="btn btn-accent" style="display:none;">기기 등록</button>
+    </form>
 
-  <form id="loginForm">
-    <label for="email">이메일:</label>
-    <input type="email" id="email" name="email" required />
-    <br />
-    <label for="password">비밀번호:</label>
-    <input type="password" id="password" name="password" required />
-    <br />
-    <button type="submit" id="loginBtn">로그인</button>
-    <button type="button" id="registerDeviceBtn" style="display:none;">기기 등록</button>
-  </form>
+    <div id="verifyDeviceSection" style="display:none;">
+      <h3>기기 등록 인증</h3>
+      <input type="text" id="deviceCodeInput" placeholder="이메일로 받은 인증코드 입력" />
+      <button id="verifyDeviceBtn" class="btn btn-accent">기기 인증 완료</button>
+    </div>
 
-  <div id="verifyDeviceSection" style="display:none;">
-    <h3>기기 등록 인증</h3>
-    <input type="text" id="deviceCodeInput" placeholder="이메일로 받은 인증코드 입력" />
-    <button id="verifyDeviceBtn">기기 인증 완료</button>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
+      <button type="button" class="btn btn-outline" style="width:48%;" onclick="location.href='/signup'">계정 생성</button>
+      <span id="toggleRegister" class="toggle-link" style="width:48%;text-align:right;">
+        새로운 기기를 등록하시겠습니까?
+      </span>
+    </div>
+
+    <div id="welcomeSection" style="display:none;">
+      <h2 id="welcomeMessage"></h2>
+      <button id="logoutBtn" class="btn btn-outline">로그아웃</button>
+    </div>
+
+    <div id="message"></div>
   </div>
-
-  <p>
-    <button type="button" onclick="location.href='/signup'">계정 생성하기</button>
-  </p>
-
-  <p>
-    <span id="toggleRegister" style="color:blue; text-decoration:underline; cursor:pointer;">
-      새로운 기기를 등록하시겠습니까?
-    </span>
-  </p>
-
-  <div id="welcomeSection" style="display:none;">
-    <h2 id="welcomeMessage"></h2>
-    <button id="logoutBtn">로그아웃</button>
-  </div>
-
-  <p id="message" style="color:red;"></p>
-
   <script>
     const loginForm = document.getElementById('loginForm');
     const loginBtn = document.getElementById('loginBtn');
@@ -91,6 +260,8 @@
       verifyDeviceSection.style.display = 'none';
       toggleRegister.textContent = isRegisteringDevice ? '기기 등록 취소' : '새로운 기기를 등록하시겠습니까?';
       messageP.textContent = '';
+      messageP.classList.remove('success');
+      messageP.style.color = '';
     });
 
     loginForm.addEventListener('submit', async (e) => {
@@ -111,14 +282,17 @@
         if (email === 'admin123@naver.com') {
           window.open('/admin', '_blank');
           messageP.textContent = '관리자 로그인 성공!';
+          messageP.classList.add('success');
         } else {
           welcomeMessage.textContent = `${email}님 환영합니다!`;
           welcomeSection.style.display = 'block';
           loginForm.style.display = 'none';
           messageP.textContent = '';
+          messageP.classList.remove('success');
         }
       } else {
         messageP.textContent = '로그인 실패: ' + (data.message || '알 수 없는 오류');
+        messageP.classList.remove('success');
       }
     });
 
@@ -128,6 +302,7 @@
 
       if (!email) {
         messageP.textContent = '이메일을 입력하세요.';
+        messageP.classList.remove('success');
         return;
       }
 
@@ -137,19 +312,22 @@
         body: JSON.stringify({ email, device_token: deviceToken })
       });
 
-      const data = await res.json();  // 먼저 data 받아오기
+      const data = await res.json();
 
       if (res.ok && data.status === 'already_registered') {
         messageP.textContent = data.message || '이미 등록된 기기입니다.';
+        messageP.classList.add('success');
         verifyDeviceSection.style.display = 'none';
         return;
       }
 
       if (res.ok && data.status === 'ok') {
         messageP.textContent = '이메일로 인증코드를 전송했습니다.';
+        messageP.classList.add('success');
         verifyDeviceSection.style.display = 'block';
       } else {
         messageP.textContent = data.message || '기기 인증 요청 실패';
+        messageP.classList.remove('success');
       }
     });
 
@@ -166,12 +344,12 @@
 
       const data = await res.json();
       if (res.ok && data.status === 'ok') {
-        messageP.style.color = 'green';
         messageP.textContent = '기기 등록이 완료되었습니다.';
+        messageP.classList.add('success');
         verifyDeviceSection.style.display = 'none';
       } else {
-        messageP.style.color = 'red';
         messageP.textContent = data.message || '기기 인증 실패';
+        messageP.classList.remove('success');
       }
     });
 
@@ -180,11 +358,11 @@
         await firebase.auth().signOut();
         welcomeSection.style.display = 'none';
         loginForm.style.display = 'block';
-        messageP.style.color = 'black';
         messageP.textContent = '로그아웃 되었습니다.';
+        messageP.classList.add('success');
       } catch (error) {
-        messageP.style.color = 'red';
         messageP.textContent = '로그아웃 실패: ' + error.message;
+        messageP.classList.remove('success');
       }
     });
   </script>
